@@ -1,0 +1,29 @@
+<!-- 上传页面模板 -->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta content="width=device-width, initial-scale=1.0" name="viewport">
+    <link href="https://hao.carlsky.cn/images/cat.png" rel="icon">
+    <title>「HAO-Netdisk」上传文件</title>
+    <!-- 添加样式 -->
+</head>
+<body>
+{% extends 'layout.html' %}
+
+{% block title %}首页 - My File Sharing App{% endblock %}
+
+{% block content %}
+<h1>上传文件</h1>
+<form action="{{ url_for('upload') }}" enctype="multipart/form-data" method="post">
+    <label for="file">选择文件：</label>
+    <input name="file" required type="file">
+    <label for="description">文件简介：</label>
+    <input name="description" required type="text">
+    <label for="username">上传用户名：</label>
+    <input name="username" required type="text">
+    <button type="submit">上传文件</button>
+</form>
+{% endblock %}
+</body>
+</html>

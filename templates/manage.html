@@ -1,0 +1,26 @@
+<!-- 管理文件页面模板 -->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta content="width=device-width, initial-scale=1.0" name="viewport">
+    <link href="https://hao.carlsky.cn/images/cat.png" rel="icon">
+    <title>「HAO_Netdisk」管理文件</title>
+    <!-- 添加样式 -->
+</head>
+<body>
+{% extends 'layout.html' %}
+
+{% block title %}首页 - My File Sharing App{% endblock %}
+
+{% block content %}
+<h1>管理文件</h1>
+<p>文件简介: {{ file_info.description }}</p>
+<p>上传用户名: {{ file_info.username }}</p>
+<p>上传时间: {{ file_info.upload_time }}</p>
+<p>文件大小: {{ file_info.size }} bytes</p>
+<a href="{{ url_for('download', filename=filename) }}">下载文件</a>
+<!-- 添加其他管理文件的功能，例如修改名称、删除等 -->
+{% endblock %}
+</body>
+</html>

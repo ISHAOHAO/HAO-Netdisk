@@ -1,0 +1,32 @@
+<!-- 首页模板 -->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta content="width=device-width, initial-scale=1.0" name="viewport">
+    <link href="https://hao.carlsky.cn/images/cat.png" rel="icon">
+    <title>「HAO-Netdisk」文件下载</title>
+    <!-- 添加样式 -->
+</head>
+<body>
+{% extends 'layout.html' %}
+
+{% block title %}首页 - [HAO-Netdisk]文件下载{% endblock %}
+
+{% block content %}
+<h1>文件下载</h1>
+<ul>
+    {% for filename, file_info in files.items() %}
+    <li>
+        <p>文件简介: {{ file_info.description }}</p>
+        <p>上传用户名: {{ file_info.username }}</p>
+        <p>上传时间: {{ file_info.upload_time }}</p>
+        <p>文件大小: {{ file_info.size }} bytes</p>
+        <a href="{{ url_for('download', filename=filename) }}">下载文件</a>
+    </li>
+    {% endfor %}
+</ul>
+{% endblock %}
+
+</body>
+</html>

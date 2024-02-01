@@ -1,0 +1,30 @@
+<!-- 注册页面模板 -->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta content="width=device-width, initial-scale=1.0" name="viewport">
+    <link href="https://hao.carlsky.cn/images/cat.png" rel="icon">
+    <title>「HAO-Netdisk」注册</title>
+    <!-- 添加样式 -->
+</head>
+<body>
+{% extends 'layout.html' %}
+
+{% block title %}首页 - My File Sharing App{% endblock %}
+
+{% block content %}
+<h1>注册页面</h1>
+<form action="{{ url_for('register') }}" method="post">
+    <label for="username">用户名：</label>
+    <input name="username" required type="text">
+    <label for="email">邮箱：</label>
+    <input name="email" required type="email">
+    <label for="password">密码：</label>
+    <input name="password" required type="password">
+    <button type="submit">注册</button>
+</form>
+<p>已有账号？<a href="{{ url_for('login') }}">登录</a></p>
+{% endblock %}
+</body>
+</html>

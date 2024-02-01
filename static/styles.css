@@ -1,0 +1,127 @@
+/* styles.css */
+
+body {
+    margin: 0;
+    padding: 0;
+    font-family: 'Roboto', sans-serif;
+    background-color: #2d2d2d; /* 深色背景 */
+    color: #ffffff; /* 白色文本 */
+}
+
+.navbar {
+    background-color: #1a1a1a; /* 深灰色导航栏背景 */
+    overflow: hidden;
+}
+
+.navbar ul {
+    list-style-type: none;
+    margin: 0;
+    padding: 0;
+    overflow: hidden;
+}
+
+.navbar li {
+    float: left;
+}
+
+.navbar a {
+    display: block;
+    color: #ffffff; /* 白色导航栏文本 */
+    text-align: center;
+    padding: 14px 16px;
+    text-decoration: none;
+    transition: background-color 0.3s;
+}
+
+.navbar a:hover {
+    background-color: #333333; /* 深灰色导航栏悬停背景 */
+    color: #ffffff;
+}
+
+.container {
+    max-width: 800px;
+    margin: 0 auto;
+    padding: 20px;
+    background-color: #3d3d3d; /* 中灰色容器背景 */
+    border-radius: 10px; /* 圆角边框 */
+    box-shadow: 0 0 10px rgba(0, 0, 0, 0.5); /* 阴影效果 */
+}
+
+.download-button {
+    display: inline-block;
+    padding: 10px 20px;
+    background-color: #4CAF50;
+    color: white;
+    text-decoration: none;
+    font-size: 18px;
+    border-radius: 5px;
+    transition: background-color 0.3s;
+}
+
+.download-button:hover {
+    background-color: #45a049;
+}
+
+/* 添加上传页面的样式 */
+.upload-form {
+    text-align: center;
+}
+
+.upload-form label {
+    display: block;
+    margin: 10px 0;
+    color: #ffffff;
+}
+
+.upload-form input[type="file"] {
+    margin-top: 5px;
+}
+
+.upload-form input[type="submit"] {
+    margin-top: 10px;
+    background-color: #4285f4; /* 谷歌颜色 */
+    color: white;
+    padding: 10px 20px;
+    font-size: 16px;
+    border: none;
+    border-radius: 5px;
+    cursor: pointer;
+    transition: background-color 0.3s;
+}
+
+.upload-form input[type="submit"]:hover {
+    background-color: #357ae8; /* 深谷歌颜色 */
+}
+
+/* 导航栏的额外样式 */
+.navbar-logo {
+    font-size: 24px;
+    font-weight: bold;
+    color: #ffffff;
+}
+#loading-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(255, 255, 255, 0.8);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 9999;
+            display: none;
+        }
+
+        .spinner {
+            border: 8px solid #3498db;
+            border-top: 8px solid #fff;
+            border-radius: 50%;
+            width: 50px;
+            height: 50px;
+            animation: spin 1s linear infinite;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
