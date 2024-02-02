@@ -1,7 +1,6 @@
 import json
 import os
-import socket
-import webbrowser
+import urllib.request
 from datetime import datetime
 
 from flask import Flask, render_template, request, redirect, url_for, send_from_directory
@@ -119,7 +118,6 @@ def upload():
     return render_template('upload.html')
 
 
-
 @app.route('/manage/<filename>')
 def manage(filename):
     # 在此处实现管理文件的功能，例如修改名称、删除等
@@ -133,30 +131,38 @@ def download(filename):
     return send_from_directory(app.config['UPLOAD_FOLDER'], filename, as_attachment=True)
 
 
+def get_public_ipv6():
+    # 使用请求获取公网 IPv6 地址
+    try:
+        response = urllib.request.urlopen('https://api64.ipify.org?format=json')
+        data = json.loads(response.read().decode('utf-8'))
+        return data['ip']
+    except Exception as e:
+        print(f"无法获取公网 IPv6 地址: {e}")
+        return None
+
+
 if __name__ == '__main__':
+
     if not os.path.exists(app.config['UPLOAD_FOLDER']):
         os.makedirs(app.config['UPLOAD_FOLDER'])
 
-    # 获取 IPv6 或 IPv4 地址
-    ipv6_address = socket.getaddrinfo(socket.gethostname(), None, socket.AF_INET6)[0][4][0]
-    ipv4_address = socket.getaddrinfo(socket.gethostname(), None, socket.AF_INET)[0][4][0]
+    # 使用 IPv6 地址来启动应用
+    host = '::'
+    port = 5000
 
-    # 如果包含冒号，则为 IPv6 地址
-    if ':' in ipv6_address:
-        host = ipv6_address
-        print("网盘已启动，请访问以下链接:")
-        print(f"  http://[{host}]:5000/  (IPv6)")
-        webbrowser.open(f"http://[{host}]:5000/")
-    else:
-        host = ipv4_address
-        print("网盘已启动，请访问以下链接:")
-        print(f"  http://{host}:5000/  (IPv4)")
-        webbrowser.open(f"http://{host}:5000/")
-
-    print("\n当前版本号: 1.0")
+    print("\n当前版本: v0.1.0")
     print("本程序由 'HAOHAO' 开发\n")
     print(f" 新版本更新:"
           f"https://gitee.com/is-haohao/HAO-Netdisk"
           f" 或 https://github.com/ISHAOHAO/HAO-Netdisk(国内需要挂加速器)")
 
-    app.run(debug=True, host=host, port=5000)
+    print("网盘已启动，请访问此链接(IPv6):")
+    print(f"  http://[{host}]:{port}/  ")
+
+    # 获取公网 IPv6 地址
+    public_ipv6 = get_public_ipv6()
+    if public_ipv6:
+        print(f"  http://[{public_ipv6}]:{port}/  (你的网盘地址)")
+
+    app.run(debug=True, host=host, port=port)
