@@ -1,5 +1,7 @@
+import json
 import os
 import socket
+import webbrowser
 from datetime import datetime
 
 from flask import Flask, render_template, request, redirect, url_for, send_from_directory
@@ -25,14 +27,72 @@ users = {}
 # 存储上传的文件信息的字典
 files = {}
 
+# JSON 文件用于保存文件信息
+FILES_JSON = os.path.join(current_script_path, 'files.json')
+
+
+def format_size(size_in_bytes):
+    size_in_kb = size_in_bytes / 1024
+    if size_in_kb < 1024:
+        return f"{size_in_kb:.2f} KB"
+    size_in_mb = size_in_kb / 1024
+    if size_in_mb < 1024:
+        return f"{size_in_mb:.2f} MB"
+    size_in_gb = size_in_mb / 1024
+    return f"{size_in_gb:.2f} GB"
+
+
+def load_files_from_json():
+    if os.path.exists(FILES_JSON):
+        with open(FILES_JSON, 'r') as json_file:
+            return json.load(json_file)
+    else:
+        return {}
+
+
+def save_files_to_json():
+    with open(FILES_JSON, 'w') as json_file:
+        json.dump(files, json_file)
+
 
 def allowed_file(filename):
     return '.' in filename and filename.rsplit('.', 1)[1].lower() in {'txt', 'pdf', 'png', 'jpg', 'jpeg', 'gif', 'zip'}
 
 
+def format_file_size(size_in_bytes):
+    # 将字节数转换为 GB 或 MB 单位
+    gb_size = size_in_bytes / (1024 ** 3)
+    mb_size = size_in_bytes / (1024 ** 2)
+
+    if gb_size >= 1:
+        return f"{gb_size:.2f} GB"
+    elif mb_size >= 1:
+        return f"{mb_size:.2f} MB"
+    else:
+        return f"{size_in_bytes} Bytes"
+
+
+try:
+    with open('files.json', 'r') as file:
+        file_content = file.read()  # 读取文件内容
+        print("File Content:", file_content)  # 输出文件内容（调试用）
+
+        # 尝试加载 JSON 数据，如果文件为空则赋予一个空字典
+        files = json.loads(file_content) if file_content.strip() else {}
+        for filename, file_info in files.items():
+            file_info['formatted_size'] = format_size(file_info['size'])
+except (FileNotFoundError, json.decoder.JSONDecodeError) as e:
+    print(f"Error Loading JSON: {e}")  # 输出解码错误信息
+    # 如果文件不存在或 JSON 解码错误，赋予一个空字典
+    files = {}
+
+
 @app.route('/')
 def index():
-    return render_template('index.html', files=files)
+    # 加载文件信息
+    global files
+    files = load_files_from_json()
+    return render_template('index.html', files=files, format_file_size=format_file_size)
 
 
 @app.route('/upload_file', methods=['GET', 'POST'])
@@ -50,11 +110,14 @@ def upload():
                 'username': request.form['username'],
                 'upload_time': datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
                 'size': os.path.getsize(file_path),
+                'formatted_size': format_size(os.path.getsize(file_path)),
                 'path': file_path
             }
             files[filename] = file_info
+            save_files_to_json()
             return redirect(url_for('index'))
     return render_template('upload.html')
+
 
 
 @app.route('/manage/<filename>')
@@ -69,18 +132,26 @@ def download(filename):
     file_path = os.path.join(app.config['UPLOAD_FOLDER'], filename)
     return send_from_directory(app.config['UPLOAD_FOLDER'], filename, as_attachment=True)
 
+
 if __name__ == '__main__':
     if not os.path.exists(app.config['UPLOAD_FOLDER']):
         os.makedirs(app.config['UPLOAD_FOLDER'])
 
-    # 获取 IPv4 或 IPv6 地址
-    host = socket.getaddrinfo(socket.gethostname(), None)[0][4][0]
-    if ':' in host:
+    # 获取 IPv6 或 IPv4 地址
+    ipv6_address = socket.getaddrinfo(socket.gethostname(), None, socket.AF_INET6)[0][4][0]
+    ipv4_address = socket.getaddrinfo(socket.gethostname(), None, socket.AF_INET)[0][4][0]
+
+    # 如果包含冒号，则为 IPv6 地址
+    if ':' in ipv6_address:
+        host = ipv6_address
         print("网盘已启动，请访问以下链接:")
         print(f"  http://[{host}]:5000/  (IPv6)")
+        webbrowser.open(f"http://[{host}]:5000/")
     else:
+        host = ipv4_address
         print("网盘已启动，请访问以下链接:")
         print(f"  http://{host}:5000/  (IPv4)")
+        webbrowser.open(f"http://{host}:5000/")
 
     print("\n当前版本号: 1.0")
     print("本程序由 'HAOHAO' 开发\n")

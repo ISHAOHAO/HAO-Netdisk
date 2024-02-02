@@ -21,7 +21,7 @@
         <p>文件简介: {{ file_info.description }}</p>
         <p>上传用户名: {{ file_info.username }}</p>
         <p>上传时间: {{ file_info.upload_time }}</p>
-        <p>文件大小: {{ file_info.size }} bytes</p>
+        <p>文件大小: {{ file_info.formatted_size }}</p>
         <a href="{{ url_for('download', filename=filename) }}">下载文件</a>
     </li>
     {% endfor %}
