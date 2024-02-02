@@ -1,6 +1,8 @@
 import json
 import os
+import socket
 import urllib.request
+import webbrowser
 from datetime import datetime
 
 from flask import Flask, render_template, request, redirect, url_for, send_from_directory
@@ -142,6 +144,28 @@ def get_public_ipv6():
         return None
 
 
+def open_browser(url):
+    # 使用 webbrowser 模块在默认浏览器中打开链接
+    try:
+        webbrowser.open(url)
+    except Exception as e:
+        print(f"无法在浏览器中打开链接: {e}")
+
+
+def get_local_ipv6():
+    try:
+        # 使用 socket 模块获取本地主机名
+        host_name = socket.gethostname()
+
+        # 使用 getaddrinfo 获取主机名对应的 IPv6 地址
+        ipv6_address = socket.getaddrinfo(host_name, None, socket.AF_INET6)[0][4][0]
+
+        return ipv6_address
+    except Exception as e:
+        print(f"获取本地IPv6地址失败: {e}")
+        return None
+
+
 if __name__ == '__main__':
 
     if not os.path.exists(app.config['UPLOAD_FOLDER']):
@@ -150,19 +174,26 @@ if __name__ == '__main__':
     # 使用 IPv6 地址来启动应用
     host = '::'
     port = 5000
+    local_ipv6 = get_local_ipv6()
+    public_ipv6 = get_public_ipv6()
 
-    print("\n当前版本: v0.1.0")
+    url = f"http://[{local_ipv6}]:{port}/"
+
+    print("\n当前版本号: 1.0")
     print("本程序由 'HAOHAO' 开发\n")
-    print(f" 新版本更新:"
-          f"https://gitee.com/is-haohao/HAO-Netdisk"
-          f" 或 https://github.com/ISHAOHAO/HAO-Netdisk(国内需要挂加速器)")
+    print(f" 新版本更新:")
+    print(f"https://gitee.com/is-haohao/HAO-Netdisk")
+    print(f"https://github.com/ISHAOHAO/HAO-Netdisk(国内需要挂加速器) ")
 
-    print("网盘已启动，请访问此链接(IPv6):")
-    print(f"  http://[{host}]:{port}/  ")
+    print("网盘启动成功，请访问以下链接（IPv6）:")
+    print(f"本地IPv6地址: {local_ipv6}")
 
     # 获取公网 IPv6 地址
-    public_ipv6 = get_public_ipv6()
     if public_ipv6:
-        print(f"  http://[{public_ipv6}]:{port}/  (你的网盘地址)")
+        print(f"外网IPv6地址:http://[{public_ipv6}]:{port}/")
+        print(f"请注意！您只能使用本地链接访问，其他用户只能使用外网链接访问")
+
+    # 在程序启动后自动打开浏览器
+    open_browser(url)
 
     app.run(debug=True, host=host, port=port)
