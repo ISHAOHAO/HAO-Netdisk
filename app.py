@@ -1,8 +1,6 @@
 import json
-import msvcrt
 import os
 import socket
-import time
 import urllib.request
 import webbrowser
 from datetime import datetime
@@ -135,55 +133,6 @@ def download(filename):
     return send_from_directory(app.config['UPLOAD_FOLDER'], filename, as_attachment=True)
 
 
-def acquire_lock(lock_file):
-    try:
-        # 尝试打开一个文件并获取锁定
-        lock = open(lock_file, 'w')
-        msvcrt.locking(lock.fileno(), msvcrt.LK_NBLCK, 1)
-        return lock
-    except IOError:
-        # 文件锁定失败，说明程序已经在运行
-        return None
-
-
-def main():
-    # 指定锁定文件的路径
-    lock_file_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'app.lock')
-
-    # 尝试获取文件锁定
-    lock = acquire_lock(lock_file_path)
-
-    if lock:
-        # 如果获取锁定成功，则执行应用程序
-        local_ipv6 = get_local_ipv6()
-        if local_ipv6:
-            print(f"网盘已启动，请访问以下链接:")
-            print(f"  http://[{local_ipv6}]:5000/  (IPv6)")
-
-            # 在这里执行你的应用程序启动逻辑
-            # ...
-
-        print("\n当前版本号: 1.0")
-        print("本程序由 'HAOHAO' 开发\n")
-        print(f" 新版本更新:"
-              f"https://gitee.com/is-haohao/HAO-Netdisk"
-              f" 或 https://github.com/ISHAOHAO/HAO-Netdisk(国内需要挂加速器)")
-
-        try:
-            # 模拟应用程序的运行
-            input("按 Enter 键启动程序...")
-        finally:
-            # 释放锁定
-
-            lock.close()
-            # 延迟片刻以确保锁定已被释放
-            time.sleep(1)
-            # 删除锁定文件
-            os.remove(lock_file_path)
-    else:
-        print("程序已经在运行中，请勿重复启动。")
-
-
 def get_public_ipv6():
     # 使用请求获取公网 IPv6 地址
     try:
@@ -218,7 +167,6 @@ def get_local_ipv6():
 
 
 if __name__ == '__main__':
-    main()
 
     if not os.path.exists(app.config['UPLOAD_FOLDER']):
         os.makedirs(app.config['UPLOAD_FOLDER'])
@@ -231,12 +179,11 @@ if __name__ == '__main__':
 
     url = f"http://[{local_ipv6}]:{port}/"
 
-    print("\n当前版本号: 1.0")
+    print("\n当前版本号: v0.1.1")
     print("本程序由 'HAOHAO' 开发\n")
     print(f" 新版本更新:")
     print(f"https://gitee.com/is-haohao/HAO-Netdisk")
     print(f"https://github.com/ISHAOHAO/HAO-Netdisk(国内需要挂加速器) ")
-
     print("网盘启动成功，请访问以下链接（IPv6）:")
     print(f"本地IPv6地址: {local_ipv6}")
 
