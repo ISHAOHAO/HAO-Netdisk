@@ -3,21 +3,99 @@
 <head>
     <meta charset="UTF-8">
     <meta content="width=device-width, initial-scale=1.0" name="viewport">
-    <title>{% block title %}My File Sharing App{% endblock %}</title>
+    <title>{% block title %} 共享模板{% endblock %}</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0-alpha1/dist/css/bootstrap.min.css" rel="stylesheet">
     <link href="https://hao.carlsky.cn/images/cat.png" rel="icon">
     <!-- 添加其他头部信息 -->
-    <style>
-        /* 自定义样式 */
+    <style> /* 加载动画样式 */
+        #loading-overlay {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(255, 255, 255, 0.8);
+            z-index: 9999;
+            justify-content: center;
+            align-items: center;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .spinner-3d {
+            width: 50px;
+            height: 50px;
+            perspective: 100px;
+        }
+
+        .cuboids {
+            position: relative;
+            width: 100%;
+            height: 100%;
+            animation: rotate 1s infinite linear;
+            transform-style: preserve-3d;
+        }
+
+        .cuboid {
+            position: absolute;
+            width: 100%;
+            height: 100%;
+            border: 4px solid rgba(0, 0, 0, 0.1);
+            box-sizing: border-box;
+            transform-origin: bottom;
+        }
+
+        .cuboid:nth-child(1) {
+            background-color: transparent;
+            border-bottom-color: #0d6efd; /* 可以修改为你的主题色 */
+            animation: fade 1s infinite ease-in-out alternate;
+        }
+
+        .cuboid:nth-child(2) {
+            transform: translateZ(25px);
+            animation: fade 1s infinite ease-in-out alternate 0.5s;
+        }
+
+        .cuboid:nth-child(3) {
+            transform: translateZ(50px);
+            animation: fade 1s infinite ease-in-out alternate 0.25s;
+        }
+
+        @keyframes rotate {
+            to {
+                transform: rotateX(360deg);
+            }
+        }
+
+        @keyframes fade {
+            0% {
+                opacity: 1;
+            }
+            50% {
+                opacity: 0.5;
+            }
+            100% {
+                opacity: 1;
+            }
+        }
     </style>
 </head>
 <body>
-<!-- 加载动画 -->
-<div id="loading-overlay">
-    <div class="spinner"></div>
-</div>
 <nav class="navbar navbar-expand-lg navbar-dark bg-dark">
     <div class="container">
+        <!-- 加载动画 -->
+<div id="loading-overlay">
+    <div class="spinner-3d">
+        <div class="cuboids">
+            <div class="cuboid"></div>
+            <div class="cuboid"></div>
+            <div class="cuboid"></div>
+        </div>
+    </div>
+</div>
         <h1><a class="navbar-brand" href="{{ url_for('index') }}">HAO_Netdisk</a></h1>
         <button aria-controls="navbarSupportedContent" aria-expanded="false" aria-label="Toggle navigation"
                 class="navbar-toggler"
@@ -44,20 +122,38 @@
 </div>
 
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0-alpha1/dist/js/bootstrap.bundle.min.js"></script>
-<script>
-    // 显示/隐藏加载动画
+<script> // 显示/隐藏加载动画函数保持不变...
     function toggleLoadingOverlay(show) {
         const loadingOverlay = document.getElementById('loading-overlay');
         loadingOverlay.style.display = show ? 'flex' : 'none';
     }
 
-    // 添加监听器，当上传按钮点击时显示加载动画
-    const uploadButton = document.getElementById('upload-button');
-    if (uploadButton) {
-        uploadButton.addEventListener('click', function () {
+    // 首先默认显示加载动画
+    toggleLoadingOverlay(true);
+
+    // 页面DOM结构加载完成时隐藏加载动画
+    document.addEventListener('DOMContentLoaded', function() {
+        toggleLoadingOverlay(false);
+    });
+
+    // 所有资源（包括图片、脚本等）加载完毕后再隐藏加载动画
+    window.addEventListener('load', function() {
+        toggleLoadingOverlay(false);
+    });
+
+    // 用户点击链接后2秒延迟执行跳转（保持不变）
+    document.addEventListener('click', function(event) {
+        if (event.target.tagName === 'A') {
+            event.preventDefault(); // 阻止默认行为
+
             toggleLoadingOverlay(true);
-        });
-    }
+
+            setTimeout(function() {
+                toggleLoadingOverlay(false);
+                window.location.href = event.target.href;
+            }, 500); // 延迟0.5秒后执行跳转操作
+        }
+    });
 </script>
 </body>
 </html>
