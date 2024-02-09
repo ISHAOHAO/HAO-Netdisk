@@ -6,7 +6,82 @@
     <meta content="width=device-width, initial-scale=1.0" name="viewport">
     <link href="https://hao.carlsky.cn/images/cat.png" rel="icon">
     <title>「HAO-Netdisk」注册</title>
-    <!-- 添加样式 -->
+    <style>
+        .form-container {
+            max-width: 400px;
+            margin: auto;
+            padding: 20px;
+            border: 1px solid #ccc;
+            border-radius: 5px;
+            background-color: #f9f9f9;
+        }
+
+        .form-group {
+            margin-bottom: 10px;
+        }
+
+        .wow {
+            font-family: 'Arial', sans-serif;
+                text-align: center;
+                margin: 0;
+                padding: 0;
+                display: flex;
+                flex-direction: column;
+                align-items: center;
+                justify-content: center;
+                height: 60vh;
+        }
+
+        label {
+            display: block;
+            margin-bottom: 5px;
+            color: #555;
+            font-weight: bold;
+            margin: 25px;
+        }
+
+        input[type="text"],
+        input[type="email"],
+        input[type="password"] {
+            width: 50%;
+            padding: 10px;
+            border: 1px solid #ccc;
+            border-radius: 5px;
+            box-sizing: border-box;
+            margin-bottom: 20px;
+        }
+
+        button {
+            display: block;
+            width: 50%;
+            padding: 10px;
+            background-color: #3498db;
+            color: #fff;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            transition: background-color 0.3s ease;
+        }
+
+        button:hover {
+            background-color: #2980b9;
+        }
+
+        p {
+            text-align: center;
+            margin-top: 50px;
+        }
+
+        a {
+            color: #3498db;
+            text-decoration: none;
+            font-weight: bold;
+        }
+
+        a:hover {
+            text-decoration: underline;
+        }
+    </style>
 </head>
 <body>
 {% extends 'layout.html' %}
@@ -15,16 +90,21 @@
 
 {% block content %}
 <h1>注册页面</h1>
-<form action="{{ url_for('register') }}" method="post">
+<p>创建一个新账户开始使用。</p>
+<form action="{{ url_for('register') }}" class="wow" method="post">
     <label for="username">用户名：</label>
     <input name="username" required type="text">
-    <label for="email">邮箱：</label>
-    <input name="email" required type="email">
+
     <label for="password">密码：</label>
     <input name="password" required type="password">
-    <button type="submit">注册</button>
+
+    <label for="email">电子邮件：</label>
+    <input name="email" required type="email">
+
+    <button style="margin-top: 40px;" type="submit">注册</button>
 </form>
 <p>已有账号？<a href="{{ url_for('login') }}">登录</a></p>
+<p>忘记密码？<a href="{{ url_for('forgot_password') }}">找回密码</a></p>
 {% endblock %}
 </body>
 </html>
