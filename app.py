@@ -7,8 +7,11 @@ import urllib.request
 import uuid
 import webbrowser
 from datetime import datetime
+from datetime import timedelta
 
-from flask import Flask, render_template, request, redirect, url_for, send_from_directory, session
+from flask import Flask, request, redirect, url_for, send_from_directory, session
+from flask import abort
+from flask import render_template
 from flask_mail import Mail, Message
 from werkzeug.utils import secure_filename
 
@@ -16,10 +19,12 @@ app = Flask(__name__)
 app.secret_key = secrets.token_hex(16)  # 16 字节的十六进制字符串
 
 app.config['MAIL_SERVER'] = 'smtp.163.com'  # 设置为您的 SMTP 服务器地址
-app.config['MAIL_PORT'] = 587
-app.config['MAIL_USE_TLS'] = True
+app.config['MAIL_PORT'] = 25  # 设置为您的 SMTP 服务器的 SSL 端口
+app.config['MAIL_USE_SSL'] = False
+app.config['MAIL_USE_TLS'] = False
 app.config['MAIL_USERNAME'] = 'hao_netdisk@163.com'  # 设置为您的邮箱
 app.config['MAIL_PASSWORD'] = 'HBBAYKISCQCIAAEX'  # 设置为您的邮箱密码
+app.config['MAIL_DEFAULT_SENDER'] = 'hao_netdisk@163.com'  # 设置为您的邮箱
 
 mail = Mail(app)
 
@@ -56,11 +61,39 @@ logged_in_users = {}
 # 存储上传的文件信息的字典
 files = {}
 
+# 存储重置密码令牌的字典
+reset_tokens = {}
+
+# 有效的令牌过期时间（以秒为单位）
+TOKEN_EXPIRATION_TIME = 1800  # 30分钟
+
 # JSON 文件用于保存文件信息
 FILES_JSON = os.path.join(current_script_path, 'files.json')
 if not os.path.exists(FILES_JSON):
     with open(FILES_JSON, 'w') as json_file:
         json.dump({}, json_file)
+
+
+def delete_file(filename):
+    try:
+        file_path = files[filename]['path']
+        os.remove(file_path)
+        del files[filename]
+        save_files_to_json(files)
+        return True
+    except Exception as e:
+        print(f"Error deleting file: {e}")
+        return False
+
+
+def update_file_description(filename, new_description):
+    try:
+        files[filename]['description'] = new_description
+        save_files_to_json(files)
+        return True
+    except Exception as e:
+        print(f"Error updating file description: {e}")
+        return False
 
 
 def format_size(size_in_bytes):
@@ -127,6 +160,29 @@ def index():
     return render_template('index.html', files=files, format_file_size=format_file_size)
 
 
+@app.route('/delete/<filename>')
+def delete(filename):
+    if 'user' not in session:
+        return redirect(url_for('login'))
+
+    if delete_file(filename):
+        return redirect(url_for('index'))
+    else:
+        abort(500)
+
+
+@app.route('/update/<filename>', methods=['POST'])
+def update(filename):
+    if 'user' not in session:
+        return redirect(url_for('login'))
+
+    new_description = request.form['new_description']
+    if update_file_description(filename, new_description):
+        return redirect(url_for('index'))
+    else:
+        abort(500)
+
+
 @app.route('/forgot_password', methods=['GET', 'POST'])
 def forgot_password():
     if request.method == 'POST':
@@ -135,33 +191,112 @@ def forgot_password():
         if username in users:
             # 生成唯一的重置令牌
             reset_token = str(uuid.uuid4())
+            expiration_time = datetime.now() + timedelta(seconds=TOKEN_EXPIRATION_TIME)
 
-            # 将令牌存储在数据库或其他持久性存储中，以便在重置密码时进行验证
-
-            # 构建重置链接
-            reset_link = f"http://{request.host}/reset_password/{reset_token}"
+            # 将令牌和相关信息存储在字典中
+            reset_tokens[reset_token] = {'username': username, 'expiration_time': expiration_time}
 
             # 发送包含重置链接的电子邮件
-            send_reset_email(username, users[username]['email'], reset_link)
+            send_reset_email(username, users[username]['email'], reset_token)
 
-            return f"重置链接已发送到注册邮箱，请查收。"
+            return render_template('password_reset_sent.html')
 
         return "用户名不存在，请重试。"
 
     return render_template('forgot_password.html')
 
 
-def send_reset_email(username, email, reset_link):
-    subject = 'Reset Your Password - HAO-Netdisk'
-    body = f"Hello {username},\n\nTo reset your password, please click the following link:\n\n{reset_link}\n\nIf you didn't request a password reset, please ignore this email."
+@app.route('/reset_password/<reset_token>', methods=['GET', 'POST'])
+def reset_password(reset_token):
+    # 检查令牌是否存在且未过期
+    if reset_token in reset_tokens and reset_tokens[reset_token]['expiration_time'] > datetime.now():
+        if request.method == 'POST':
+            new_password = request.form.get('new_password')
+            username = reset_tokens[reset_token]['username']
 
-    msg = Message(subject=subject, recipients=[email], body=body)
+            # 更新用户密码
+            users[username]['password'] = new_password
+
+            # 重置密码后，删除令牌
+            del reset_tokens[reset_token]
+
+            return "密码重置成功，请使用新密码登录。"
+
+        return render_template('reset_password.html', reset_token=reset_token)
+
+    return "无效的重置链接或链接已过期。"
+
+
+def send_email(username, email):
+    subject = '来自HAO-Netdisk的邮件'
+
+    with app.app_context():
+        html_body = render_template('reset_password_email.html', username=username)
+
+    msg = Message(subject=subject, recipients=[email], html=html_body)
 
     try:
         mail.send(msg)
-        print(f"Password reset email sent to {email}")
+        print(f"测试邮件发送至 {email}")
+        return "测试邮件发送成功！"
     except Exception as e:
-        print(f"Error sending email: {e}")
+        print(f"发送邮件时出错: {e}")
+        return "发送邮件时出错。请检查日志以获取更多信息。"
+
+
+def send_reset_email(username, email, reset_token):
+    subject = '重置密码 - HAO-Netdisk'
+
+    with app.app_context():
+        reset_link = url_for('reset_password', reset_token=reset_token, _external=True)
+        html_body = render_template('reset_password_email.html', username=username, reset_link=reset_link)
+
+    msg = Message(subject=subject, recipients=[email], html=html_body)
+
+    try:
+        mail.send(msg)
+        print(f"密码重置邮件已发送至 {email}")
+        return "密码重置邮件已发送，请查收。"
+    except Exception as e:
+        print(f"发送邮件时出错: {e}")
+        return "发送邮件时出错。请检查日志以获取更多信息。"
+
+
+@app.route('/send_test_email')
+def send_test_email():
+    if 'user' not in session:
+        return redirect(url_for('login'))
+
+    username = session['user']['username']
+    email = session['user']['email']
+
+    result = send_email(username, email)
+    return result
+
+
+@app.errorhandler(400)
+def bad_request(e):
+    return render_template('error.html', error="Bad Request (400)", details=str(e)), 400
+
+
+@app.errorhandler(401)
+def unauthorized(e):
+    return render_template('error.html', error="Unauthorized (401)", details=str(e)), 401
+
+
+@app.errorhandler(403)
+def forbidden(e):
+    return render_template('error.html', error="Forbidden (403)", details=str(e)), 403
+
+
+@app.errorhandler(404)
+def not_found(e):
+    return render_template('error.html', error="Not Found (404)", details=str(e)), 404
+
+
+@app.errorhandler(500)
+def internal_server_error(e):
+    return render_template('error.html', error="Internal Server Error (500)", details=str(e)), 500
 
 
 @app.route('/register', methods=['GET', 'POST'])
@@ -292,7 +427,7 @@ if __name__ == '__main__':
 
     url = f"http://[{local_ipv6}]:{port}/"
 
-    print("\n当前版本号: v0.1.1")
+    print("\n当前版本号: v0.1.3")
     print("本程序由 'HAOHAO' 开发\n")
     print(f" 新版本更新:")
     print(f"https://gitee.com/is-haohao/HAO-Netdisk")
