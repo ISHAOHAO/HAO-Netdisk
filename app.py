@@ -11,6 +11,7 @@ from datetime import timedelta
 
 from flask import Flask, request, redirect, url_for, send_from_directory, session
 from flask import abort
+from flask import jsonify
 from flask import render_template
 from flask_mail import Mail, Message
 from werkzeug.utils import secure_filename
@@ -152,12 +153,27 @@ except (FileNotFoundError, json.decoder.JSONDecodeError) as e:
     files = {}
 
 
-@app.route('/')
+@app.route('/', methods=['GET'])
 def index():
+    page = request.args.get('page', 1, type=int)
+    per_page = 4  # 每页显示的文件数量
+    search_query = request.args.get('search', '')
+
     # 加载文件信息
     global files
     files = load_files_from_json()
-    return render_template('index.html', files=files, format_file_size=format_file_size)
+
+    # 进行搜索
+    filtered_files = {filename: file_info for filename, file_info in files.items() if
+                      search_query.lower() in file_info['description'].lower()}
+
+    # 分页显示
+    total_files = len(filtered_files)
+    total_pages = (total_files + per_page - 1) // per_page  # 计算总页数
+    paginated_files = dict(list(filtered_files.items())[per_page * (page - 1): per_page * page])
+
+    return render_template('index.html', files=paginated_files, format_file_size=format_file_size,
+                           search_query=search_query, page=page, total_pages=total_pages)
 
 
 @app.route('/delete/<filename>')
@@ -349,6 +365,12 @@ def upload():
         file = request.files['file']
         if file and allowed_file(file.filename):
             filename = secure_filename(file.filename)
+
+            # 解决文件名重复问题
+            files = load_files_from_json()
+            if filename in files:
+                filename = f"{filename.split('.')[0]}_{secrets.token_hex(4)}.{filename.split('.')[-1]}"
+
             file_path = os.path.join(app.config['UPLOAD_FOLDER'], filename)
             file.save(file_path)
 
@@ -360,11 +382,16 @@ def upload():
                 'formatted_size': format_size(os.path.getsize(file_path)),
                 'path': file_path
             }
-            files = load_files_from_json()
             files[filename] = file_info
             save_files_to_json(files)
             return redirect(url_for('index'))
     return render_template('upload.html')
+
+
+# 新增一个路由用于获取文件总数（用于分页）
+@app.route('/file_count', methods=['GET'])
+def file_count():
+    return jsonify({'file_count': len(files)})
 
 
 @app.route('/manage/<filename>')

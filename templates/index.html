@@ -15,6 +15,15 @@
 
 {% block content %}
 <h1>文件下载</h1>
+<!-- 在顶部导航栏下方添加搜索框 -->
+<div class="container mt-3">
+    <form action="{{ url_for('index') }}" class="form-inline mb-3" method="GET">
+        <div class="input-group">
+            <input class="form-control" name="search" placeholder="搜索文件..." type="text" value="{{ search_query }}">
+            <button class="btn btn-outline-primary" type="submit">搜索</button>
+        </div>
+    </form>
+</div>
 <ul>
     {% for filename, file_info in files.items() %}
     <li>
@@ -26,6 +35,19 @@
     </li>
     {% endfor %}
 </ul>
+<!-- 在文件列表下方添加分页导航 -->
+<div class="container">
+    <nav aria-label="文件分页">
+        <ul class="pagination">
+            {% for page_num in range(1, total_pages + 1) %}
+            <li class="page-item {% if page_num == page %}active{% endif %}">
+                <a class="page-link" href="{{ url_for('index', page=page_num, search=search_query) }}">{{ page_num
+                    }}</a>
+            </li>
+            {% endfor %}
+        </ul>
+    </nav>
+</div>
 {% endblock %}
 
 </body>
