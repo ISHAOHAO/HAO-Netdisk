@@ -1,23 +1,32 @@
 import json
+import logging
 import os
 import secrets
 import socket
 import urllib.request
-import urllib.request
 import uuid
 import webbrowser
-from datetime import datetime
-from datetime import timedelta
+from datetime import datetime, timedelta
 
-from flask import Flask, request, redirect, url_for, send_from_directory, session
-from flask import abort
-from flask import jsonify
-from flask import render_template
+from flask import Flask, request, redirect, url_for, send_from_directory, render_template, jsonify, abort
+from flask import session
+from flask_bcrypt import Bcrypt
 from flask_mail import Mail, Message
+from flask_sslify import SSLify
 from werkzeug.utils import secure_filename
 
+from flask_session import Session
+
 app = Flask(__name__)
-app.secret_key = secrets.token_hex(16)  # 16 字节的十六进制字符串
+app.secret_key = secrets.token_hex(16)
+app.config['SESSION_TYPE'] = 'filesystem'
+Session(app)
+
+# 启用 HTTPS，确保传输安全
+sslify = SSLify(app)
+
+bcrypt = Bcrypt(app)
+logging.basicConfig(filename='app.log', level=logging.INFO)
 
 app.config['MAIL_SERVER'] = 'smtp.163.com'  # 设置为您的 SMTP 服务器地址
 app.config['MAIL_PORT'] = 25  # 设置为您的 SMTP 服务器的 SSL 端口
@@ -33,6 +42,7 @@ mail = Mail(app)
 UPLOADS_DIR = 'uploads'
 TEMPLATE_FOLDER = 'templates'
 FILES_JSON = 'files.json'
+USERS_JSON = 'users.json'
 
 app.config['UPLOAD_FOLDER'] = UPLOADS_DIR
 app.config['TEMPLATE_FOLDER'] = TEMPLATE_FOLDER
@@ -73,6 +83,37 @@ FILES_JSON = os.path.join(current_script_path, 'files.json')
 if not os.path.exists(FILES_JSON):
     with open(FILES_JSON, 'w') as json_file:
         json.dump({}, json_file)
+
+
+# 从 JSON 文件加载用户数据
+def load_users_from_json():
+    if os.path.exists(USERS_JSON):
+        with open(USERS_JSON, 'r') as user_file:
+            return json.load(user_file)
+    else:
+        return {}
+
+
+# 将用户数据保存到 JSON 文件
+def save_users_to_json(users):
+    with open(USERS_JSON, 'w') as user_file:
+        json.dump(users, user_file)
+
+
+# 当应用程序启动时载入用户
+users = load_users_from_json()
+
+
+def hash_password(password):
+    # 使用 bcrypt 对密码进行哈希处理
+    return bcrypt.generate_password_hash(password).decode('utf-8')
+
+
+def check_password(username, password):
+    # 检查用户名和密码是否匹配
+    if username in users and bcrypt.check_password_hash(users[username]['password'], password):
+        return True
+    return False
 
 
 def delete_file(filename):
@@ -182,8 +223,10 @@ def delete(filename):
         return redirect(url_for('login'))
 
     if delete_file(filename):
+        logging.info(f"用户 {session['user']['username']} 删除了文件: {filename}")
         return redirect(url_for('index'))
     else:
+        logging.error(f"删除文件时出错: {filename}")
         abort(500)
 
 
@@ -194,8 +237,10 @@ def update(filename):
 
     new_description = request.form['new_description']
     if update_file_description(filename, new_description):
-        return redirect(url_for('index'))
+        logging.info(f"用户 {session['user']['username']} 更新了文件描述: {filename}")
+        return redirect(url_for('manage', filename=filename))
     else:
+        logging.error(f"更新文件描述时出错: {filename}")
         abort(500)
 
 
@@ -214,6 +259,7 @@ def forgot_password():
 
             # 发送包含重置链接的电子邮件
             send_reset_email(username, users[username]['email'], reset_token)
+            logging.info(f"用户 {username} 请求重置密码，并收到了重置邮件")
 
             return render_template('password_reset_sent.html')
 
@@ -230,12 +276,13 @@ def reset_password(reset_token):
             new_password = request.form.get('new_password')
             username = reset_tokens[reset_token]['username']
 
-            # 更新用户密码
-            users[username]['password'] = new_password
+            # 更新用户密码，使用哈希处理密码
+            users[username]['password'] = hash_password(new_password)
 
             # 重置密码后，删除令牌
             del reset_tokens[reset_token]
 
+            logging.info(f"用户 {username} 重置了密码")
             return "密码重置成功，请使用新密码登录。"
 
         return render_template('reset_password.html', reset_token=reset_token)
@@ -320,13 +367,16 @@ def register():
     if request.method == 'POST':
         username = request.form['username']
         password = request.form['password']
-        email = request.form['email']  # 将字段名称更改为 'email'
+        email = request.form['email']
 
         if username in users:
             return "用户名已存在，请选择其他用户名。"
 
-        # 保存用户信息（在真实应用中，可能需要对密码进行哈希处理）
-        users[username] = {'password': password, 'email': email}
+        # 保存用户信息并散列密码
+        users[username] = {'password': hash_password(password), 'email': email}
+
+        # 将用户保存到 JSON 文件
+        save_users_to_json(users)
 
         return render_template('register_success.html')
 
@@ -339,13 +389,13 @@ def login():
         username = request.form['username']
         password = request.form['password']
 
-        if username in users and users[username]['password'] == password:
-            # 将用户信息存储在 session 中，标记为已登录
+        if check_password(username, password):
+            # 在会话中存储用户信息
             session['user'] = {'username': username, 'email': users[username]['email']}
             logged_in_users[username] = session['user']
             return redirect(url_for('index'))
 
-        return "无效的用户名或密码，请重试。"
+        return "用户名或密码无效。请重试。"
 
     return render_template('login.html')
 
@@ -376,7 +426,7 @@ def upload():
 
             file_info = {
                 'description': request.form['description'],
-                'username': request.form['username'],
+                'username': session['user']['username'],
                 'upload_time': datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
                 'size': os.path.getsize(file_path),
                 'formatted_size': format_size(os.path.getsize(file_path)),
@@ -384,6 +434,7 @@ def upload():
             }
             files[filename] = file_info
             save_files_to_json(files)
+            logging.info(f"用户 {session['user']['username']} 上传了文件: {filename}")
             return redirect(url_for('index'))
     return render_template('upload.html')
 
@@ -399,7 +450,7 @@ def manage(filename):
     if 'user' not in session:
         return redirect(url_for('login'))
     file_info = files.get(filename)
-    return render_template('manage.html', file_info=file_info)
+    return render_template('manage.html', files=files, file_info=file_info)
 
 
 @app.route('/download/<filename>')
@@ -454,9 +505,9 @@ if __name__ == '__main__':
 
     url = f"http://[{local_ipv6}]:{port}/"
 
-    print("\n当前版本号: v0.1.3")
+    print("\n当前版本号: v0.1.4")
     print("本程序由 'HAOHAO' 开发\n")
-    print(f" 新版本更新:")
+    print(f"新版本更新:")
     print(f"https://gitee.com/is-haohao/HAO-Netdisk/releases")
     print(f"https://github.com/ISHAOHAO/HAO-Netdisk/releases(国内需要挂加速器) ")
     print("网盘启动成功，请访问以下链接（IPv6）:")

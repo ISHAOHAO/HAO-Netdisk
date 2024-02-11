@@ -110,6 +110,22 @@
                 <li class="nav-item">
                     <a class="nav-link" href="{{ url_for('upload') }}">上传文件</a>
                 </li>
+                <li class="nav-item">
+                    <a class="nav-link" href="{{ url_for('manage', filename='dummy') }}">文件管理</a>
+                </li>
+                <!-- 添加登录链接和用户信息显示 -->
+                {% if 'user' in session %}
+                <li class="nav-item">
+                    <span class="nav-link">欢迎，{{ session['user']['username'] }}！</span>
+                </li>
+                <li class="nav-item">
+                    <a class="nav-link" href="{{ url_for('logout') }}">注销</a>
+                </li>
+                {% else %}
+                <li class="nav-item">
+                    <a class="nav-link" href="{{ url_for('login') }}">登录</a>
+                </li>
+                {% endif %}
                 <!-- 其他导航链接 -->
             </ul>
         </div>

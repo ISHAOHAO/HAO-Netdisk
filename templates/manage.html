@@ -6,21 +6,61 @@
     <meta content="width=device-width, initial-scale=1.0" name="viewport">
     <link href="https://hao.carlsky.cn/images/cat.png" rel="icon">
     <title>「HAO_Netdisk」管理文件</title>
-    <!-- 添加样式 -->
+    <style>
+        .delete-btn {
+            color: white;
+        }
+    </style>
+    <script>
+        function confirmDelete(filename) {
+            if (confirm("确定要删除文件吗？")) {
+                window.location.href = "/delete/" + filename;
+            }
+        }
+    </script>
 </head>
 <body>
 {% extends 'layout.html' %}
 
-{% block title %}首页 - My File Sharing App{% endblock %}
-
 {% block content %}
-<h1>管理文件</h1>
-<p>文件简介: {{ file_info.description }}</p>
-<p>上传用户名: {{ file_info.username }}</p>
-<p>上传时间: {{ file_info.upload_time }}</p>
-<p>文件大小: {{ file_info.size }} bytes</p>
-<a href="{{ url_for('download', filename=filename) }}">下载文件</a>
-<!-- 添加其他管理文件的功能，例如修改名称、删除等 -->
+<h2>文件管理</h2>
+<table class="table">
+    <thead>
+    <tr>
+        <th scope="col">文件名</th>
+        <th scope="col">描述</th>
+        <th scope="col">上传时间</th>
+        <th scope="col">大小</th>
+        <th scope="col">操作</th>
+    </tr>
+    </thead>
+    <tbody>
+    {% for filename, file_info in files.items() %}
+    {% if file_info.username == session.user.username %}
+    <tr>
+        <td>{{ filename }}</td>
+        <td>
+            {{ file_info.description }}
+            <form action="{{ url_for('update', filename=filename) }}" class="form-inline" method="POST">
+                <div class="form-group">
+                    <input class="form-control" name="new_description" placeholder="新描述" type="text">
+                    <button class="btn btn-primary" type="submit">更新描述</button>
+                </div>
+            </form>
+        </td>
+        <td>{{ file_info.upload_time }}</td>
+        <td>{{ file_info.formatted_size }}</td>
+        <td>
+            <a class="btn btn-primary" href="{{ url_for('download', filename=filename) }}">下载</a>
+            <a class="btn btn-danger delete-btn" href="javascript:void(0);"
+               onclick="confirmDelete('{{ filename }}')">删除</a>
+        </td>
+    </tr>
+    {% endif %}
+    {% endfor %}
+    </tbody>
+</table>
 {% endblock %}
+
 </body>
 </html>
