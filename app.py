@@ -457,8 +457,8 @@ if __name__ == '__main__':
     print("\n当前版本号: v0.1.3")
     print("本程序由 'HAOHAO' 开发\n")
     print(f" 新版本更新:")
-    print(f"https://gitee.com/is-haohao/HAO-Netdisk")
-    print(f"https://github.com/ISHAOHAO/HAO-Netdisk(国内需要挂加速器) ")
+    print(f"https://gitee.com/is-haohao/HAO-Netdisk/releases")
+    print(f"https://github.com/ISHAOHAO/HAO-Netdisk/releases(国内需要挂加速器) ")
     print("网盘启动成功，请访问以下链接（IPv6）:")
     print(f"本地IPv6地址: http://[{local_ipv6}]:{port}/")
 
