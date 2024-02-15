@@ -122,12 +122,35 @@
                     <a class="nav-link" href="{{ url_for('logout') }}">注销</a>
                 </li>
                 {% else %}
+                <!-- 其他导航链接 -->
+                {% endif %}
+            </ul>
+            <div class="navbar-nav">
+                {% if 'user' in session %}
+                <li class="nav-item">
+                    {% set avatar_filename = session['user']['avatar'] %}
+                    {% set username = session['user']['username'] %}
+                    {% set avatar_path = url_for('avatar', filename=avatar_filename) if avatar_filename else
+                    url_for('avatars', filename=username + '.png') %}
+                    <a href="{{ url_for('profile') }}">
+                        <img alt="User Avatar" class="rounded-circle" src="{{ avatar_path }}"
+                             style="width: 30px; height: 30px; margin-right: 10px;">
+                    </a>
+                    <span class="nav-link">{{ session['user']['username'] }}</span>
+                </li>
+                <li class="nav-item">
+                    <a class="nav-link" href="{{ url_for('logout') }}">注销</a>
+                </li>
+                {% else %}
                 <li class="nav-item">
                     <a class="nav-link" href="{{ url_for('login') }}">登录</a>
                 </li>
+                <li class="nav-item">
+                    <a class="nav-link" href="{{ url_for('register') }}">注册</a>
+                </li>
                 {% endif %}
-                <!-- 其他导航链接 -->
-            </ul>
+
+            </div>
         </div>
     </div>
 </nav>

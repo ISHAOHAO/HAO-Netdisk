@@ -2,24 +2,28 @@ import json
 import logging
 import os
 import secrets
+import shutil
 import socket
 import urllib.request
 import uuid
 import webbrowser
 from datetime import datetime, timedelta
 
-from flask import Flask, request, redirect, url_for, send_from_directory, render_template, jsonify, abort
+from flask import Flask, request, redirect, url_for, render_template, jsonify, abort
+from flask import flash
+from flask import send_from_directory
 from flask import session
 from flask_bcrypt import Bcrypt
 from flask_mail import Mail, Message
+from flask_session import Session
 from flask_sslify import SSLify
 from werkzeug.utils import secure_filename
-
-from flask_session import Session
 
 app = Flask(__name__)
 app.secret_key = secrets.token_hex(16)
 app.config['SESSION_TYPE'] = 'filesystem'
+UPLOAD_AVATARS_DIR = 'templates/avatars'  # 用户头像上传目录
+app.config['UPLOAD_AVATARS_FOLDER'] = UPLOAD_AVATARS_DIR
 Session(app)
 
 # 启用 HTTPS，确保传输安全
@@ -83,6 +87,10 @@ FILES_JSON = os.path.join(current_script_path, 'files.json')
 if not os.path.exists(FILES_JSON):
     with open(FILES_JSON, 'w') as json_file:
         json.dump({}, json_file)
+
+
+def allowed_avatar_file(filename):
+    return '.' in filename and filename.rsplit('.', 1)[1].lower() in {'png', 'jpg', 'jpeg', 'gif'}
 
 
 # 从 JSON 文件加载用户数据
@@ -373,7 +381,12 @@ def register():
             return "用户名已存在，请选择其他用户名。"
 
         # 保存用户信息并散列密码
-        users[username] = {'password': hash_password(password), 'email': email}
+        users[username] = {'password': hash_password(password), 'email': email, 'avatar': username + '.png'}
+
+        # 复制默认头像并重命名为用户名
+        default_avatar_path = os.path.join(app.config['UPLOAD_AVATARS_FOLDER'], 'default_avatar.png')
+        user_avatar_path = os.path.join(app.config['UPLOAD_AVATARS_FOLDER'], f"{username}.png")
+        shutil.copyfile(default_avatar_path, user_avatar_path)
 
         # 将用户保存到 JSON 文件
         save_users_to_json(users)
@@ -404,6 +417,55 @@ def login():
 def logout():
     # 从 session 中移除用户信息，标记为已退出
     session.pop('user', None)
+    return redirect(url_for('index'))
+
+
+@app.route('/profile')
+def profile():
+    if 'user' not in session:
+        return redirect(url_for('login'))
+
+    user_info = users.get(session['user']['username'], {})
+    avatar_filename = user_info.get('avatar')
+    avatar_path = url_for('avatar', filename=avatar_filename) if avatar_filename else url_for('static',
+                                                                                              filename='avatars/default_avatar.png')
+
+    return render_template('profile.html', avatar_path=avatar_path)
+
+
+@app.route('/static/avatars/<filename>')
+def avatar(filename):
+    return send_from_directory(app.config['UPLOAD_AVATARS_FOLDER'], filename)
+
+
+@app.route('/upload_avatar', methods=['POST'])
+def upload_avatar():
+    if 'user' not in session:
+        return redirect(url_for('login'))
+
+    avatar = request.files.get('avatar')
+    if avatar and allowed_avatar_file(avatar.filename):
+        username = session['user']['username']
+        avatar_filename = f"{username}.png"  # 使用用户名作为头像文件名，确保唯一性
+        avatar_path = os.path.join(app.config['UPLOAD_AVATARS_FOLDER'], avatar_filename)
+
+        # 删除之前的头像
+        old_avatar = users[username].get('avatar')
+        if old_avatar:
+            old_avatar_path = os.path.join(app.config['UPLOAD_AVATARS_FOLDER'], old_avatar)
+            if os.path.exists(old_avatar_path):
+                os.remove(old_avatar_path)
+
+        # 保存新头像
+        avatar.save(avatar_path)
+
+        # 更新用户头像信息
+        users[username]['avatar'] = avatar_filename
+        save_users_to_json(users)
+
+        # 添加提示信息
+        flash('头像更新成功！', 'success')
+
     return redirect(url_for('index'))
 
 
@@ -443,6 +505,11 @@ def upload():
 @app.route('/file_count', methods=['GET'])
 def file_count():
     return jsonify({'file_count': len(files)})
+
+
+@app.route('/templates/avatars/<filename>')
+def avatars(filename):
+    return send_from_directory('templates/avatars', filename)
 
 
 @app.route('/manage/<filename>')
@@ -505,7 +572,7 @@ if __name__ == '__main__':
 
     url = f"http://[{local_ipv6}]:{port}/"
 
-    print("\n当前版本号: v0.1.4")
+    print("\n当前版本号: v0.1.5")
     print("本程序由 'HAOHAO' 开发\n")
     print(f"新版本更新:")
     print(f"https://gitee.com/is-haohao/HAO-Netdisk/releases")
