@@ -1,0 +1,30 @@
+<!-- 首页模板 -->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta content="width=device-width, initial-scale=1.0" name="viewport">
+    <link href="https://hao.carlsky.cn/images/cat.png" rel="icon">
+    <title>「HAO-Netdisk」设置个人头像</title>
+    <!-- 添加样式 -->
+</head>
+<body>
+{% extends 'layout.html' %}
+
+{% block title %}个人资料{% endblock %}
+
+{% block content %}
+<h2>个人资料</h2>
+<img alt="User Avatar" class="rounded-circle" src="{{ avatar_path }}"
+     style="width: 100px; height: 100px; margin-right: 10px;">
+<form action="{{ url_for('upload_avatar') }}" enctype="multipart/form-data" method="post">
+    <div class="mb-3">
+        <label class="form-label" for="avatar">更改头像</label>
+        <input class="form-control" id="avatar" name="avatar" type="file">
+    </div>
+    <button class="btn btn-primary" type="submit">上传头像</button>
+</form>
+{% endblock %}
+
+</body>
+</html>
