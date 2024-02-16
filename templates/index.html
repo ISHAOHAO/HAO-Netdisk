@@ -1,10 +1,12 @@
-<!-- 首页模板 -->
+<!-- index.html 模板 -->
 <!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
     <meta content="width=device-width, initial-scale=1.0" name="viewport">
     <link href="https://hao.carlsky.cn/images/cat.png" rel="icon">
+    <link crossorigin="anonymous" href="https://stackpath.bootstrapcdn.com/bootstrap/4.3.1/css/bootstrap.min.css"
+          integrity="sha384-ggOyR0iXCbMQv3Xipma34MD+dH/1fQ784/j6cY/iJTQUOhcWr7x9JvoRxT2MZw1T" rel="stylesheet">
     <title>「HAO-Netdisk」文件下载</title>
     <!-- 添加样式 -->
 </head>
@@ -32,6 +34,11 @@
         <p>上传时间: {{ file_info.upload_time }}</p>
         <p>文件大小: {{ file_info.formatted_size }}</p>
         <a href="{{ url_for('download', filename=filename) }}">下载文件</a>
+        {% if filename.lower().endswith(('.png', '.jpg', '.jpeg', '.gif', '.pdf', '.txt')) %}
+        <a class="btn btn-outline-secondary" href="{{ url_for('preview_file', filename=filename) }}">预览</a>
+        {% endif %}
+        <!-- 在文件列表下方添加分享文件链接 -->
+        <a class="btn btn-info" href="{{ url_for('share_file_page', filename=filename) }}">分享文件</a>
     </li>
     {% endfor %}
 </ul>
@@ -39,12 +46,27 @@
 <div class="container">
     <nav aria-label="文件分页">
         <ul class="pagination">
+            {% if page > 1 %}
+            <li class="page-item">
+                <a aria-label="Previous" class="page-link"
+                   href="{{ url_for('index', page=page-1, search=search_query) }}">
+                    <span aria-hidden="true">&laquo;</span>
+                </a>
+            </li>
+            {% endif %}
             {% for page_num in range(1, total_pages + 1) %}
             <li class="page-item {% if page_num == page %}active{% endif %}">
                 <a class="page-link" href="{{ url_for('index', page=page_num, search=search_query) }}">{{ page_num
                     }}</a>
             </li>
             {% endfor %}
+            {% if page < total_pages %}
+            <li class="page-item">
+                <a aria-label="Next" class="page-link" href="{{ url_for('index', page=page+1, search=search_query) }}">
+                    <span aria-hidden="true">&raquo;</span>
+                </a>
+            </li>
+            {% endif %}
         </ul>
     </nav>
 </div>

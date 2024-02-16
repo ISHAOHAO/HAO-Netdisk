@@ -9,9 +9,10 @@ import webbrowser
 from datetime import datetime, timedelta
 from shutil import copyfile
 
-from flask import Flask, request, redirect, url_for, render_template, jsonify, abort
+from flask import Flask, request, jsonify, send_from_directory
 from flask import flash
-from flask import send_from_directory
+from flask import redirect, url_for, render_template, abort
+from flask import send_file
 from flask import session
 from flask_bcrypt import Bcrypt
 from flask_mail import Mail, Message
@@ -66,7 +67,7 @@ app.config['TEMPLATE_FOLDER'] = template_folder
 app.template_folder = template_folder
 
 # 设置上传文件夹的路径为绝对路径
-UPLOAD_FOLDER = os.path.join(current_script_path, 'uploads')
+UPLOAD_FOLDER = os.path.join(ROOT_DIR, 'uploads')
 app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
 
 # 存储用户信息的字典，实际项目应使用数据库
@@ -77,6 +78,9 @@ logged_in_users = {}
 
 # 存储上传的文件信息的字典
 files = {}
+
+# 存储文件分享信息的字典
+file_shares = {}
 
 # 存储重置密码令牌的字典
 reset_tokens = {}
@@ -89,6 +93,25 @@ FILES_JSON = os.path.join(current_script_path, 'files.json')
 if not os.path.exists(FILES_JSON):
     with open(FILES_JSON, 'w') as json_file:
         json.dump({}, json_file)
+
+
+# 生成文件分享链接
+def generate_share_link(filename, expiration_time, password=None):
+    share_id = secrets.token_hex(16)
+    file_shares[share_id] = {'filename': filename, 'expiration_time': expiration_time, 'password': password}
+    return share_id
+
+
+# 检查文件分享链接是否有效
+def is_share_valid(share_id):
+    if share_id in file_shares:
+        share_info = file_shares[share_id]
+        if share_info['expiration_time'] > datetime.now():
+            return True
+        else:
+            # 如果链接已过期，删除分享信息
+            del file_shares[share_id]
+    return False
 
 
 def allowed_avatar_file(filename):
@@ -159,9 +182,11 @@ def format_size(size_in_bytes):
     return f"{size_in_gb:.2f} GB"
 
 
+# 从 JSON 文件加载文件信息
 def load_files_from_json():
-    if os.path.exists(FILES_JSON):
-        with open(FILES_JSON, 'r') as file:
+    files_json_path = os.path.join(ROOT_DIR, 'files.json')
+    if os.path.exists(files_json_path):
+        with open(files_json_path, 'r') as file:
             return json.load(file)
     else:
         return {}
@@ -207,24 +232,73 @@ except (FileNotFoundError, json.decoder.JSONDecodeError) as e:
 @app.route('/', methods=['GET'])
 def index():
     page = request.args.get('page', 1, type=int)
-    per_page = 4  # 每页显示的文件数量
+    per_page = request.args.get('per_page', 4, type=int)  # 动态分页大小，默认为4
     search_query = request.args.get('search', '')
 
     # 加载文件信息
-    global files
     files = load_files_from_json()
 
     # 进行搜索
     filtered_files = {filename: file_info for filename, file_info in files.items() if
                       search_query.lower() in file_info['description'].lower()}
 
+    # 按描述内容相关性排序结果
+    sorted_files = dict(sorted(filtered_files.items(), key=lambda item: item[1]['description'].lower()))
+
     # 分页显示
-    total_files = len(filtered_files)
+    total_files = len(sorted_files)
     total_pages = (total_files + per_page - 1) // per_page  # 计算总页数
-    paginated_files = dict(list(filtered_files.items())[per_page * (page - 1): per_page * page])
+    paginated_files = dict(list(sorted_files.items())[per_page * (page - 1): per_page * page])
 
     return render_template('index.html', files=paginated_files, format_file_size=format_file_size,
-                           search_query=search_query, page=page, total_pages=total_pages)
+                           search_query=search_query, page=page, total_pages=total_pages, per_page=per_page)
+
+
+@app.route('/share/<filename>', methods=['POST'])
+def share_file(filename):
+    expiration_days = int(request.form['expiration_days'])
+    expiration_time = datetime.now() + timedelta(days=expiration_days)
+    password = request.form['password'] if 'password' in request.form else None
+    share_id = generate_share_link(filename, expiration_time, password)
+    return f"分享链接: {request.host_url}access/{share_id}"
+
+
+# 用于访问分享的文件
+@app.route('/access/<share_id>')
+def access_shared_file(share_id):
+    if is_share_valid(share_id):
+        # 返回文件下载页面或直接下载文件
+        return redirect(url_for('download', filename=file_shares[share_id]['filename']))
+    else:
+        return "分享链接无效或已过期。"
+
+
+# 用于输入访问密码后访问分享的文件
+@app.route('/access/<share_id>/password', methods=['POST'])
+def access_shared_file_with_password(share_id):
+    password = request.form['password']
+    if is_share_valid(share_id) and file_shares[share_id]['password'] == password:
+        # 返回文件下载页面或直接下载文件
+        return redirect(url_for('download', filename=file_shares[share_id]['filename']))
+    else:
+        return "访问密码错误。"
+
+
+@app.route('/share_file/<filename>', methods=['GET'])
+def share_file_page(filename):
+    return render_template('share_file.html', filename=filename)
+
+
+@app.route('/preview/<filename>')
+def preview_file(filename):
+    file_path = os.path.join(app.config['UPLOAD_FOLDER'], filename)
+
+    # 检查文件类型，只预览特定类型的文件
+    if filename.lower().endswith(('.png', '.jpg', '.jpeg', '.gif', '.pdf', '.txt')):
+        return send_file(file_path, as_attachment=False)
+
+    # 如果文件类型不支持预览，可以返回错误提示或重定向到其他页面
+    return "不支持预览的文件类型"
 
 
 @app.route('/delete/<filename>')
@@ -238,6 +312,20 @@ def delete(filename):
     else:
         logging.error(f"删除文件时出错: {filename}")
         abort(500)
+
+
+# 获取文件列表的API接口
+@app.route('/api/files', methods=['GET'])
+def get_file_list():
+    files = load_files_from_json()
+    return jsonify({'files': files})
+
+
+# 下载文件的API接口
+@app.route('/api/download/<filename>', methods=['GET'])
+def download_file(filename):
+    file_path = os.path.join(app.config['UPLOAD_FOLDER'], filename)
+    return send_from_directory(app.config['UPLOAD_FOLDER'], filename, as_attachment=True)
 
 
 @app.route('/update/<filename>', methods=['POST'])
@@ -582,7 +670,7 @@ if __name__ == '__main__':
 
     url = f"http://[{local_ipv6}]:{port}/"
 
-    print("\n当前版本号: v0.1.5")
+    print("\n当前版本号: v0.1.6")
     print("本程序由 'HAOHAO' 开发\n")
     print(f"新版本更新:")
     print(f"https://gitee.com/is-haohao/HAO-Netdisk/releases")
