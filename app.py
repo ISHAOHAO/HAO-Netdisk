@@ -2,12 +2,12 @@ import json
 import logging
 import os
 import secrets
-import shutil
 import socket
 import urllib.request
 import uuid
 import webbrowser
 from datetime import datetime, timedelta
+from shutil import copyfile
 
 from flask import Flask, request, redirect, url_for, render_template, jsonify, abort
 from flask import flash
@@ -43,10 +43,12 @@ app.config['MAIL_DEFAULT_SENDER'] = 'hao_netdisk@163.com'  # 设置为您的邮�
 mail = Mail(app)
 
 # 指定上传文件的根目录
-UPLOADS_DIR = 'uploads'
-TEMPLATE_FOLDER = 'templates'
-FILES_JSON = 'files.json'
-USERS_JSON = 'users.json'
+ROOT_DIR = os.path.abspath(os.path.dirname(__file__))
+UPLOADS_DIR = os.path.join(ROOT_DIR, 'uploads')
+TEMPLATE_FOLDER = os.path.join(ROOT_DIR, 'templates')
+AVATARS_DIR = os.path.join(TEMPLATE_FOLDER, 'avatars')
+FILES_JSON = os.path.join(ROOT_DIR, 'files.json')
+USERS_JSON = os.path.join(ROOT_DIR, 'users.json')
 
 app.config['UPLOAD_FOLDER'] = UPLOADS_DIR
 app.config['TEMPLATE_FOLDER'] = TEMPLATE_FOLDER
@@ -381,15 +383,19 @@ def register():
             return "用户名已存在，请选择其他用户名。"
 
         # 保存用户信息并散列密码
-        users[username] = {'password': hash_password(password), 'email': email, 'avatar': username + '.png'}
-
-        # 复制默认头像并重命名为用户名
-        default_avatar_path = os.path.join(app.config['UPLOAD_AVATARS_FOLDER'], 'default_avatar.png')
-        user_avatar_path = os.path.join(app.config['UPLOAD_AVATARS_FOLDER'], f"{username}.png")
-        shutil.copyfile(default_avatar_path, user_avatar_path)
+        users[username] = {'password': hash_password(password), 'email': email}
 
         # 将用户保存到 JSON 文件
         save_users_to_json(users)
+
+        # 复制默认头像文件到新用户头像文件
+        default_avatar_path = os.path.join(AVATARS_DIR, 'default_avatar.png')
+        new_user_avatar_path = os.path.join(AVATARS_DIR, f'{username}.png')
+
+        # 确保目标目录存在
+        os.makedirs(AVATARS_DIR, exist_ok=True)
+
+        copyfile(default_avatar_path, new_user_avatar_path)
 
         return render_template('register_success.html')
 
@@ -433,11 +439,6 @@ def profile():
     return render_template('profile.html', avatar_path=avatar_path)
 
 
-@app.route('/static/avatars/<filename>')
-def avatar(filename):
-    return send_from_directory(app.config['UPLOAD_AVATARS_FOLDER'], filename)
-
-
 @app.route('/upload_avatar', methods=['POST'])
 def upload_avatar():
     if 'user' not in session:
@@ -447,12 +448,21 @@ def upload_avatar():
     if avatar and allowed_avatar_file(avatar.filename):
         username = session['user']['username']
         avatar_filename = f"{username}.png"  # 使用用户名作为头像文件名，确保唯一性
-        avatar_path = os.path.join(app.config['UPLOAD_AVATARS_FOLDER'], avatar_filename)
+
+        # 更新用户头像信息
+        users[username]['avatar'] = avatar_filename
+        save_users_to_json(users)
+
+        # 确保目标目录存在，如果不存在则创建
+        avatars_dir = os.path.join(app.config['TEMPLATE_FOLDER'], 'avatars')
+        os.makedirs(avatars_dir, exist_ok=True)
+
+        avatar_path = os.path.join(avatars_dir, avatar_filename)
 
         # 删除之前的头像
         old_avatar = users[username].get('avatar')
         if old_avatar:
-            old_avatar_path = os.path.join(app.config['UPLOAD_AVATARS_FOLDER'], old_avatar)
+            old_avatar_path = os.path.join(avatars_dir, old_avatar)
             if os.path.exists(old_avatar_path):
                 os.remove(old_avatar_path)
 
@@ -507,9 +517,9 @@ def file_count():
     return jsonify({'file_count': len(files)})
 
 
-@app.route('/templates/avatars/<filename>')
+@app.route('/avatars/<filename>')
 def avatars(filename):
-    return send_from_directory('templates/avatars', filename)
+    return send_from_directory(AVATARS_DIR, filename)
 
 
 @app.route('/manage/<filename>')
