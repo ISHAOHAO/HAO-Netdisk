@@ -1,0 +1,35 @@
+<!-- share_file.html 模板 -->
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta content="width=device-width, initial-scale=1.0" name="viewport">
+    <link href="https://hao.carlsky.cn/images/cat.png" rel="icon">
+    <title>[HAO-Netdisk]文件分享</title>
+    <!-- 添加样式 -->
+</head>
+<body>
+{% extends 'layout.html' %}
+
+{% block title %}文件分享 - [HAO-Netdisk]文件下载{% endblock %}
+
+{% block content %}
+<h1>文件分享</h1>
+<div class="container mt-3">
+    <form action="{{ url_for('share_file', filename=filename) }}" method="POST">
+        <div class="form-group">
+            <label for="expiration_days">过期天数：</label>
+            <input id="expiration_days" min="1" name="expiration_days" required type="number">
+        </div>
+        <div class="form-group">
+            <label for="password">访问密码（可选）：</label>
+            <input id="password" name="password" type="password">
+        </div>
+        <button class="btn btn-primary" type="submit">生成分享链接</button>
+    </form>
+</div>
+{% endblock %}
+
+</body>
+</html>
