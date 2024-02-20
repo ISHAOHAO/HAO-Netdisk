@@ -6,7 +6,8 @@ import socket
 import urllib.request
 import uuid
 import webbrowser
-from datetime import datetime, timedelta
+from datetime import datetime
+from datetime import timedelta
 from shutil import copyfile
 
 from flask import Flask, request, jsonify, send_from_directory
@@ -18,7 +19,11 @@ from flask_bcrypt import Bcrypt
 from flask_mail import Mail, Message
 from flask_session import Session
 from flask_sslify import SSLify
+from tqdm import tqdm  # 引入 tqdm 库
 from werkzeug.utils import secure_filename
+
+# 在app.py开头添加全局变量声明
+global files
 
 app = Flask(__name__)
 app.secret_key = secrets.token_hex(16)
@@ -93,6 +98,29 @@ FILES_JSON = os.path.join(current_script_path, 'files.json')
 if not os.path.exists(FILES_JSON):
     with open(FILES_JSON, 'w') as json_file:
         json.dump({}, json_file)
+
+
+def save_file_with_progress(file, file_path, progress_callback):
+    # 打开文件进行写入
+    with open(file_path, 'wb') as f:
+        # 初始化已上传的字节数
+        uploaded_bytes = 0
+
+        # 获取文件总字节数（尝试从请求头获取）
+        total_bytes = int(request.headers.get('Content-Length', 0))
+
+        # 使用 tqdm 迭代器包装文件内容
+        with tqdm(total=total_bytes, unit='B', unit_scale=True, unit_divisor=1024) as pbar:
+            # 循环读取文件内容并写入
+            while True:
+                chunk = file.read(1024 * 1024)  # 读取 1MB 数据
+                if not chunk:
+                    break
+                f.write(chunk)
+                uploaded_bytes += len(chunk)  # 更新已上传字节数
+                pbar.update(len(chunk))  # 更新 tqdm 进度条
+                progress_callback(int(uploaded_bytes / total_bytes * 100))  # 回调上传进度
+            pbar.close()  # 关闭 tqdm 进度条
 
 
 # 生成文件分享链接
@@ -231,8 +259,9 @@ except (FileNotFoundError, json.decoder.JSONDecodeError) as e:
 
 @app.route('/', methods=['GET'])
 def index():
+    global files  # 声明为全局变量
     page = request.args.get('page', 1, type=int)
-    per_page = request.args.get('per_page', 4, type=int)  # 动态分页大小，默认为4
+    per_page = request.args.get('per_page', 4, type=int)
     search_query = request.args.get('search', '')
 
     # 加载文件信息
@@ -247,7 +276,7 @@ def index():
 
     # 分页显示
     total_files = len(sorted_files)
-    total_pages = (total_files + per_page - 1) // per_page  # 计算总页数
+    total_pages = (total_files + per_page - 1) // per_page
     paginated_files = dict(list(sorted_files.items())[per_page * (page - 1): per_page * page])
 
     return render_template('index.html', files=paginated_files, format_file_size=format_file_size,
@@ -582,20 +611,24 @@ def upload():
                 filename = f"{filename.split('.')[0]}_{secrets.token_hex(4)}.{filename.split('.')[-1]}"
 
             file_path = os.path.join(app.config['UPLOAD_FOLDER'], filename)
-            file.save(file_path)
+
+            # 使用新的函数来保存文件，并传递进度回调函数
+            save_file_with_progress(file, file_path, lambda progress: print(f'Upload progress: {progress}%'))
 
             file_info = {
                 'description': request.form['description'],
                 'username': session['user']['username'],
                 'upload_time': datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
-                'size': os.path.getsize(file_path),
+                'size': os.path.getsize(file_path),  # 现在可以安全获取文件大小
                 'formatted_size': format_size(os.path.getsize(file_path)),
                 'path': file_path
             }
             files[filename] = file_info
             save_files_to_json(files)
             logging.info(f"用户 {session['user']['username']} 上传了文件: {filename}")
-            return redirect(url_for('index'))
+
+            # 返回 JSON 格式的成功响应，包含重定向地址
+            return jsonify({'redirect': url_for('index')})
     return render_template('upload.html')
 
 
