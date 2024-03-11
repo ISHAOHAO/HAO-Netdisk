@@ -100,17 +100,15 @@ if not os.path.exists(FILES_JSON):
         json.dump({}, json_file)
 
 
-def save_file_with_progress(file, file_path, progress_callback):
+def save_file_with_progress(file, file_path, progress_callback, update_interval=0.1):
     # 打开文件进行写入
     with open(file_path, 'wb') as f:
         # 初始化已上传的字节数
         uploaded_bytes = 0
-
         # 获取文件总字节数（尝试从请求头获取）
         total_bytes = int(request.headers.get('Content-Length', 0))
-
         # 使用 tqdm 迭代器包装文件内容
-        with tqdm(total=total_bytes, unit='B', unit_scale=True, unit_divisor=1024) as pbar:
+        with tqdm(total=total_bytes, unit='B', unit_scale=True, unit_divisor=1024, miniters=update_interval) as pbar:
             # 循环读取文件内容并写入
             while True:
                 chunk = file.read(1024 * 1024)  # 读取 1MB 数据
@@ -118,8 +116,9 @@ def save_file_with_progress(file, file_path, progress_callback):
                     break
                 f.write(chunk)
                 uploaded_bytes += len(chunk)  # 更新已上传字节数
-                pbar.update(len(chunk))  # 更新 tqdm 进度条
-                progress_callback(int(uploaded_bytes / total_bytes * 100))  # 回调上传进度
+                if pbar.n % update_interval == 0:
+                    pbar.update(len(chunk))  # 更新 tqdm 进度条
+                    progress_callback(int(uploaded_bytes / total_bytes * 100))  # 回调上传进度
             pbar.close()  # 关闭 tqdm 进度条
 
 
@@ -189,6 +188,7 @@ def delete_file(filename):
         return False
 
 
+# 在需要修改文件信息时，直接在内存中进行修改
 def update_file_description(filename, new_description):
     try:
         files[filename]['description'] = new_description
@@ -197,6 +197,10 @@ def update_file_description(filename, new_description):
     except Exception as e:
         print(f"Error updating file description: {e}")
         return False
+
+
+def get_file_info(filename):
+    return files.get(filename)
 
 
 def format_size(size_in_bytes):
@@ -212,14 +216,14 @@ def format_size(size_in_bytes):
 
 # 从 JSON 文件加载文件信息
 def load_files_from_json():
-    files_json_path = os.path.join(ROOT_DIR, 'files.json')
-    if os.path.exists(files_json_path):
-        with open(files_json_path, 'r') as file:
+    if os.path.exists(FILES_JSON):
+        with open(FILES_JSON, 'r') as file:
             return json.load(file)
     else:
         return {}
 
 
+# 将文件信息保存到 JSON 文件中
 def save_files_to_json(files):
     with open(FILES_JSON, 'w') as file:
         json.dump(files, file)
@@ -703,7 +707,7 @@ if __name__ == '__main__':
 
     url = f"http://[{local_ipv6}]:{port}/"
 
-    print("\n当前版本号: v0.1.6")
+    print("\n当前版本号: v0.1.8")
     print("本程序由 'HAOHAO' 开发\n")
     print(f"新版本更新:")
     print(f"https://gitee.com/is-haohao/HAO-Netdisk/releases")
