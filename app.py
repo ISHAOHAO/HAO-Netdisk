@@ -123,7 +123,7 @@ def save_file_with_progress(file, file_path, progress_callback, update_interval=
 
 
 # 生成文件分享链接
-def generate_share_link(filename, expiration_time, password=None):
+def generate_share_link(filename, expiration_time=None, password=None):
     share_id = secrets.token_hex(16)
     file_shares[share_id] = {'filename': filename, 'expiration_time': expiration_time, 'password': password}
     return share_id
@@ -133,7 +133,7 @@ def generate_share_link(filename, expiration_time, password=None):
 def is_share_valid(share_id):
     if share_id in file_shares:
         share_info = file_shares[share_id]
-        if share_info['expiration_time'] > datetime.now():
+        if not share_info['expiration_time'] or share_info['expiration_time'] > datetime.now():
             return True
         else:
             # 如果链接已过期，删除分享信息
@@ -297,11 +297,20 @@ def share_file(filename):
 
 
 # 用于访问分享的文件
-@app.route('/access/<share_id>')
+@app.route('/access/<share_id>', methods=['GET', 'POST'])
 def access_shared_file(share_id):
     if is_share_valid(share_id):
-        # 返回文件下载页面或直接下载文件
-        return redirect(url_for('download', filename=file_shares[share_id]['filename']))
+        # 如果设置了密码，则要求用户输入密码
+        if file_shares[share_id]['password']:
+            if request.method == 'POST':
+                password = request.form['password']
+                if password == file_shares[share_id]['password']:
+                    return redirect(url_for('download', filename=file_shares[share_id]['filename']))
+                else:
+                    return "密码错误，请重试。"
+            return render_template('enter_password.html', share_id=share_id)
+        else:
+            return redirect(url_for('download', filename=file_shares[share_id]['filename']))
     else:
         return "分享链接无效或已过期。"
 
@@ -317,8 +326,15 @@ def access_shared_file_with_password(share_id):
         return "访问密码错误。"
 
 
-@app.route('/share_file/<filename>', methods=['GET'])
+# 更新文件分享页面，以允许用户设置分享选项
+@app.route('/share_file/<filename>', methods=['GET', 'POST'])
 def share_file_page(filename):
+    if request.method == 'POST':
+        expiration_days = int(request.form['expiration_days'])
+        expiration_time = datetime.now() + timedelta(days=expiration_days)
+        password = request.form['password'] if 'password' in request.form else None
+        share_id = generate_share_link(filename, expiration_time, password)
+        return f"分享链接: {request.host_url}access/{share_id}"
     return render_template('share_file.html', filename=filename)
 
 
@@ -553,8 +569,8 @@ def profile():
         return redirect(url_for('login'))
 
     user_info = users.get(session['user']['username'], {})
-    avatar_filename = user_info.get('avatar')
-    avatar_path = url_for('avatar', filename=avatar_filename) if avatar_filename else url_for('static',
+    avatar_filename = user_info.get('avatars')
+    avatar_path = url_for('avatars', filename=avatar_filename) if avatar_filename else url_for('static',
                                                                                               filename='avatars/default_avatar.png')
 
     return render_template('profile.html', avatar_path=avatar_path)
@@ -707,7 +723,7 @@ if __name__ == '__main__':
 
     url = f"http://[{local_ipv6}]:{port}/"
 
-    print("\n当前版本号: v0.1.8")
+    print("\n当前版本号: v0.1.9")
     print("本程序由 'HAOHAO' 开发\n")
     print(f"新版本更新:")
     print(f"https://gitee.com/is-haohao/HAO-Netdisk/releases")
