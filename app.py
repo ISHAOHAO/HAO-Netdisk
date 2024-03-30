@@ -230,7 +230,10 @@ def save_files_to_json(files):
 
 
 def allowed_file(filename):
-    return '.' in filename and filename.rsplit('.', 1)[1].lower() in {'txt', 'pdf', 'png', 'jpg', 'jpeg', 'gif', 'zip'}
+    return '.' in filename and filename.rsplit('.', 1)[1].lower() in {'txt', 'pdf', 'png', 'jpg', 'jpeg', 'gif', 'zip',
+                                                                      'rar', 'doc', 'docx', 'xls', 'xlsx', 'ppt',
+                                                                      'pptx', 'mp3', 'mp4', 'avi', 'mkv', 'mov', 'wmv',
+                                                                      'flv', 'webm', 'ogg', 'm4a', 'wav', 'aac'}
 
 
 def format_file_size(size_in_bytes):
@@ -571,7 +574,7 @@ def profile():
     user_info = users.get(session['user']['username'], {})
     avatar_filename = user_info.get('avatars')
     avatar_path = url_for('avatars', filename=avatar_filename) if avatar_filename else url_for('static',
-                                                                                              filename='avatars/default_avatar.png')
+                                                                                               filename='avatars/default_avatar.png')
 
     return render_template('profile.html', avatar_path=avatar_path)
 
@@ -740,3 +743,6 @@ if __name__ == '__main__':
     open_browser(url)
 
     app.run(debug=True, host=host, port=port)
+
+    # 使用IPV4
+    # app.run(debug=True, host="0.0.0.0", port=port)
