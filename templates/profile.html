@@ -3,19 +3,59 @@
 <head>
     <meta charset="UTF-8">
     <meta content="width=device-width, initial-scale=1.0" name="viewport">
-    <link href="https://game.ishaohao.cn/images/cat.png" rel="icon">
     <title>上传头像</title>
+    <link href="https://game.ishaohao.cn/images/cat.png" rel="icon">
     <link href="https://cdnjs.cloudflare.com/ajax/libs/cropperjs/1.5.12/cropper.min.css" rel="stylesheet">
+    {% extends 'layout.html' %}
+
+    {% block title %}上传头像{% endblock %}
+
+    {% block content %}
+    <style>
+        body {
+            background-color: #333; /* 更改背景色为深灰色 */
+            color: #fff; /* 更改字体颜色为白色 */
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; /* 使用现代字体 */
+        }
+
+        .btn-upload {
+            background-color: #007bff; /* 使用现代按钮颜色 */
+            border-color: #007bff;
+            color: #fff;
+            transition: background-color 0.3s ease; /* 添加过渡效果 */
+        }
+
+        .btn-upload:hover {
+            background-color: #0056b3; /* 悬停时改变按钮颜色 */
+        }
+
+        #avatarPreview {
+            border: 2px solid #fff; /* 添加白色边框 */
+            box-shadow: 0 0 10px rgba(255, 255, 255, 0.5); /* 添加白色阴影效果 */
+            transition: transform 0.3s ease; /* 添加过渡效果 */
+        }
+
+        #avatarPreview:hover {
+            transform: scale(1.1); /* 悬停时放大图片 */
+        }
+    </style>
 </head>
-<body>
-<h2>上传头像</h2>
-<input id="avatarInput" type="file">
-<div>
-    <button onclick="cropAndUpload()">上传头像</button>
+
+<div class="container">
+    <div class="row justify-content-center">
+        <div class="col-md-6">
+            <h2 class="mt-5 mb-4 text-center">上传头像</h2>
+            <div class="text-center">
+                <input class="form-control mb-4" id="avatarInput" type="file">
+                <button class="btn btn-upload btn-lg" id="uploadButton">上传头像</button>
+            </div>
+            <div class="mt-4">
+                <img alt="Preview" class="img-thumbnail mx-auto d-block" id="avatarPreview" style="max-width: 300px;">
+            </div>
+        </div>
+    </div>
 </div>
-<div>
-    <img alt="Preview" id="avatarPreview" src="">
-</div>
+
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/cropperjs/1.5.12/cropper.min.js"></script>
 <script>
@@ -28,45 +68,51 @@
             var img = document.getElementById('avatarPreview');
             img.src = reader.result;
 
-            cropper = new Cropper(img, {
-                aspectRatio: 1,
-                viewMode: 1,
-                preview: '.img-preview',
-                crop: function (event) {
-                    console.log(event.detail.x);
-                    console.log(event.detail.y);
-                    console.log(event.detail.width);
-                    console.log(event.detail.height);
-                    console.log(event.detail.rotate);
-                    console.log(event.detail.scaleX);
-                    console.log(event.detail.scaleY);
-                }
-            });
+            img.onload = function () {
+                cropper = new Cropper(img, {
+                    aspectRatio: 1,
+                    viewMode: 1,
+                    preview: '.img-preview',
+                    crop: function (event) {
+                        console.log(event.detail);
+                    }
+                });
+            };
         };
         reader.readAsDataURL(files[0]);
     });
 
-    function cropAndUpload() {
+    document.getElementById('uploadButton').addEventListener('click', function (event) {
+        event.preventDefault(); // 阻止默认提交行为
+
         var canvas = cropper.getCroppedCanvas({
-            width: 100,
-            height: 100,
+            width: 200, // 设置合适的宽度
+            height: 200, // 设置合适的高度
         });
 
         canvas.toBlob(function (blob) {
             var formData = new FormData();
-            formData.append('avatar', blob);
+            formData.append('avatar', blob, 'avatar.png'); // 修改为合适的文件名和格式
 
-            // 使用 AJAX 或者其他方式上传 formData
-            // 示例：使用 fetch 进行上传
-            fetch('{{ url_for('upload_avatar') }}', {
+            fetch('/upload_avatar', {
                 method: 'POST',
                 body: formData,
             })
-            .then(response => response.json())
-            .then(data => console.log(data))
+            .then(response => {
+                if (response.ok) {
+                    console.log('头像上传成功！');
+                    alert('头像上传成功！');
+                    window.location.href = '/';
+                } else {
+                    console.error('上传失败：', response.status, response.statusText);
+                    alert('上传失败，请选择有效的图片文件或重试。');
+                     window.location.href = 'profile';
+                }
+            })
             .catch(error => console.error('Error:', error));
         });
-    }
+    });
 </script>
+{% endblock %}
 </body>
 </html>

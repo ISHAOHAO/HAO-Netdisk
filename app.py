@@ -141,6 +141,10 @@ def is_share_valid(share_id):
     return False
 
 
+# 允许上传的头像文件类型
+ALLOWED_EXTENSIONS = {'png', 'jpg', 'jpeg', 'gif'}
+
+
 def allowed_avatar_file(filename):
     return '.' in filename and filename.rsplit('.', 1)[1].lower() in {'png', 'jpg', 'jpeg', 'gif'}
 
@@ -585,9 +589,9 @@ def upload_avatar():
         return redirect(url_for('login'))
 
     avatar = request.files.get('avatar')
-    if avatar and allowed_avatar_file(avatar.filename):
+    if avatar and allowed_file(avatar.filename):
         username = session['user']['username']
-        avatar_filename = f"{username}.png"  # 使用用户名作为头像文件名，确保唯一性
+        avatar_filename = f"{username}.{avatar.filename.rsplit('.', 1)[1].lower()}"  # 使用用户名作为头像文件名，确保唯一性
 
         # 更新用户头像信息
         users[username]['avatar'] = avatar_filename
@@ -615,6 +619,9 @@ def upload_avatar():
 
         # 添加提示信息
         flash('头像更新成功！', 'success')
+
+    else:
+        flash('上传失败，请选择有效的图片文件。', 'error')
 
     return redirect(url_for('index'))
 
@@ -726,7 +733,7 @@ if __name__ == '__main__':
 
     url = f"http://[{local_ipv6}]:{port}/"
 
-    print("\n当前版本号: v0.1.9")
+    print("\n当前版本号: v0.2.0")
     print("本程序由 'HAOHAO' 开发\n")
     print(f"新版本更新:")
     print(f"https://gitee.com/is-haohao/HAO-Netdisk/releases")
