@@ -749,7 +749,7 @@ if __name__ == '__main__':
     # 在程序启动后自动打开浏览器
     open_browser(url)
 
-    # app.run(debug=True, host=host, port=port)
+    app.run(debug=True, host=host, port=port)
 
     # 使用IPV4
-    app.run(debug=True, host="0.0.0.0", port=port)
+    # app.run(debug=True, host="0.0.0.0", port=port)
