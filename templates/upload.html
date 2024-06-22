@@ -1,4 +1,3 @@
-<!-- 上传页面模板 -->
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -57,7 +56,6 @@
     {% block title %}首页 - [HAO-Netdisk]文件下载{% endblock %}
 
     {% block content %}
-    <title>上传文件 - HAO-Netdisk</title>
 </head>
 <body>
 <!-- 加载动画 -->
@@ -130,23 +128,29 @@
                     $('#progress-container').hide();
                     toggleLoadingOverlay(false);  // 隐藏加载动画
 
-                    // 处理上传成功的逻辑
-                    window.location.href = data.redirect;
+                    // 显示成功消息并跳转
+                    alert('文件上传成功！');
+                    window.location.href = '/';
                 },
-                error: function () {
-                    // 处理上传失败的逻辑
-                    alert('文件上传失败，请重试。');
+                error: function (xhr) {
+                    // 隐藏进度条容器
+                    $('#progress-container').hide();
                     toggleLoadingOverlay(false);  // 隐藏加载动画
+
+                    // 显示失败消息
+                    var errorMessage = '文件上传失败，请重试。';
+                    if (xhr.responseJSON && xhr.responseJSON.error) {
+                        errorMessage += '\n错误原因: ' + xhr.responseJSON.error;
+                    }
+                    alert(errorMessage);
                 }
             });
         });
     });
-</script>
 
-<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0-alpha1/dist/js/bootstrap.bundle.min.js"></script>
-<script> // 显示/隐藏加载动画函数保持不变...
+    // 显示/隐藏加载动画函数
     function toggleLoadingOverlay(show) {
-        const loadingOverlay = document.getElementById('loading-overlay');
+        const loadingOverlay = document.getElementById('loading');
         loadingOverlay.style.display = show ? 'flex' : 'none';
     }
 
@@ -177,8 +181,9 @@
         }
     });
 </script>
-{% endblock %}
 
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0-alpha1/dist/js/bootstrap.bundle.min.js"></script>
+{% endblock %}
 
 </body>
 </html>

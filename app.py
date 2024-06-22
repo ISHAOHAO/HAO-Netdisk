@@ -733,7 +733,7 @@ if __name__ == '__main__':
 
     url = f"http://[{local_ipv6}]:{port}/"
 
-    print("\n当前版本号: v0.2.0")
+    print("\n当前版本号: v0.2.1")
     print("本程序由 'HAOHAO' 开发\n")
     print(f"新版本更新:")
     print(f"https://gitee.com/is-haohao/HAO-Netdisk/releases")
@@ -749,7 +749,7 @@ if __name__ == '__main__':
     # 在程序启动后自动打开浏览器
     open_browser(url)
 
-    app.run(debug=True, host=host, port=port)
+    # app.run(debug=True, host=host, port=port)
 
     # 使用IPV4
-    # app.run(debug=True, host="0.0.0.0", port=port)
+    app.run(debug=True, host="0.0.0.0", port=port)

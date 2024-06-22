@@ -2,6 +2,11 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
+    {% extends 'layout.html' %}
+
+    {% block title %}首页 - [HAO-Netdisk]文件下载{% endblock %}
+
+    {% block content %}
     <meta charset="UTF-8">
     <meta content="width=device-width, initial-scale=1.0" name="viewport">
     <link href="https://game.ishaohao.cn/images/cat.png" rel="icon">
@@ -11,11 +16,7 @@
     <!-- 添加样式 -->
 </head>
 <body>
-{% extends 'layout.html' %}
 
-{% block title %}首页 - [HAO-Netdisk]文件下载{% endblock %}
-
-{% block content %}
 <h1>文件下载</h1>
 <!-- 在顶部导航栏下方添加搜索框 -->
 <div class="container mt-3">
