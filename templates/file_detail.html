@@ -1,0 +1,23 @@
+{% extends "base.html" %}
+
+{% block content %}
+<section>
+    <h1>文件预览</h1>
+    <div class="file-preview">
+        {% if file.filename.endswith(('png', 'jpg', 'jpeg', 'gif')) %}
+        <img alt="图片预览" class="preview-img" src="{{ url_for('download', filename=file.filename) }}">
+        {% elif file.filename.endswith(('mp4', 'webm')) %}
+        <video class="preview-video" controls>
+            <source src="{{ url_for('download', filename=file.filename) }}" type="video/mp4">
+            您的浏览器不支持视频标签。
+        </video>
+        {% elif file.filename.endswith('pdf') %}
+        <embed class="preview-pdf" src="{{ url_for('download', filename=file.filename) }}" type="application/pdf">
+        {% else %}
+        <p>无法预览此文件类型。</p>
+        {% endif %}
+        <br>
+        <a class="button" href="{{ url_for('file_manager') }}">返回文件管理</a>
+    </div>
+</section>
+{% endblock %}

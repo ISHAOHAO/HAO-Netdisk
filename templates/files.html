@@ -1,0 +1,73 @@
+{% extends "base.html" %}
+
+{% block content %}
+<section>
+    <h1>文件列表</h1>
+    <form action="{{ url_for('files') }}" class="search-form" method="get">
+        <input class="form-control" name="search" placeholder="搜索文件..." type="text" value="{{ search_query }}">
+        <button class="button" type="submit">搜索</button>
+    </form>
+    <table class="table table-striped">
+        <thead>
+        <tr>
+            <th>描述</th>
+            <th>上传者</th>
+            <th>大小</th>
+            <th>上传时间</th>
+            <th>操作</th>
+            <th>分享链接</th>
+        </tr>
+        </thead>
+        <tbody>
+        {% for file in files.items %}
+        <tr style="border-bottom: 1px;border-bottom: 2px dotted;border-bottom: medium dashed blue;">
+            <td>{{ file.description }}</td>
+            <td>{{ file.uploader.username }}</td>
+            <td>{{ file.file_size|filesizeformat }}</td>
+            <td>{{ file.upload_time.strftime('%Y-%m-%d %H:%M:%S') }}</td>
+            <td>
+                <a class="button" href="{{ url_for('download', filename=file.filename) }}"
+                   style="margin-bottom: 5px;margin-top: 5px;">下载</a>
+                <a class="button" href="{{ url_for('file_detail', file_id=file.id) }}">预览</a>
+            </td>
+            <td>
+                {% if file.share_link %}
+                <a class="button" href="{{ url_for('share_file', share_link=file.share_link) }}"
+                   target="_blank">查看分享链接</a>
+                <form action="{{ url_for('file_manager') }}" class="d-inline-block" method="post">
+                    <input name="file_id" type="hidden" value="{{ file.id }}">
+                    <input name="action" type="hidden" value="delete_share_link">
+                    <button class="button" type="submit">删除分享链接</button>
+                </form>
+                {% else %}
+                <form action="{{ url_for('file_manager') }}" class="d-inline-block" method="post">
+                    <input name="file_id" type="hidden" value="{{ file.id }}">
+                    <input name="action" type="hidden" value="create_share_link">
+                    <label class="div_input" style="margin-bottom: 5px;">
+                        <input name="password" type="password">
+                        <div class="underline"></div>
+                        <label>设置密码</label>
+                    </label>
+                    <button class="button" type="submit">创建分享链接</button>
+                </form>
+                {% endif %}
+            </td>
+        </tr>
+        {% endfor %}
+        </tbody>
+    </table>
+    <div class="pagination">
+        {% if files.has_prev %}
+        <a class="page-link" href="{{ url_for('files', page=files.prev_num, search=search_query) }}">上一页</a>
+        {% endif %}
+        {% for page_num in files.iter_pages() %}
+        {% if page_num %}
+        <a class="page-link" href="{{ url_for('files', page=page_num, search=search_query) }}">{{ page_num }}</a>
+        {% endif %}
+        {% endfor %}
+        {% if files.has_next %}
+        <a class="page-link" href="{{ url_for('files', page=files.next_num, search=search_query) }}">下一页</a>
+        {% endif %}
+    </div>
+</section>
+{% endblock %}

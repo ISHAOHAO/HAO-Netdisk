@@ -1,0 +1,28 @@
+{% extends "base.html" %}
+
+{% block content %}
+<section>
+    <h1>分享文件</h1>
+    <div class="share-file-container">
+        <p>文件名: {{ file.filename }}</p>
+        <p>描述: {{ file.description }}</p>
+        <div id="share-link-container">
+            <p>分享链接:</p>
+            <a href="" id="url-display" target="_blank"></a>
+        </div>
+        <form action="{{ url_for('share_file', share_link=file.share_link) }}" class="share-file-form" method="POST">
+            <input name="password" placeholder="输入密码" type="password">
+            <button class="button" type="submit">下载文件</button>
+            <a class="button" href="{{ url_for('file_manager') }}">返回文件管理</a>
+        </form>
+    </div>
+</section>
+
+<script>
+    // 获取当前页面的URL
+    var currentUrl = window.location.href;
+
+    // 将URL显示在页面上
+    document.getElementById('url-display').textContent = currentUrl;
+</script>
+{% endblock %}

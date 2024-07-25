@@ -1,0 +1,343 @@
+/* 全局样式 */
+*{
+    margin: 0;
+    padding: 0;
+    outline: none;
+    box-sizing: border-box;
+    font-family: 'Poppins',sans-serif;
+}
+body {
+    background-color: #f8f9fa;
+    color: #212529;
+    font-family: Arial, sans-serif;
+}
+
+/* 导航条 */
+.navbar {
+    background-color: #343a40; /* 深色背景 */
+}
+
+.navbar-brand {
+    color: #ffffff;
+}
+
+.navbar-nav .nav-link {
+    color: #e0e0e0;
+}
+
+.navbar-nav .nav-link:hover {
+    color: #ffffff;
+}
+
+/* 容器 */
+.container {
+    max-width: 1200px;
+    margin: 0 auto;
+    padding: 20px;
+    border-radius: 10px;
+    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+}
+
+/* 统一标题样式 */
+h1, h2 {
+    color: #007bff;
+    margin-bottom:20px;
+}
+
+/* 按钮样式 */
+.button, .button1 {
+    background-color: #007bff;
+    color: #fff;
+    border: none;
+    padding: 8px 15px;
+    border-radius: 5px;
+    text-decoration: none;
+    display: inline-block;
+    margin-bottom: 5px;
+    margin-top: 5px;
+}
+.button1 {
+    display:flex;
+    justify-content:center;
+    align-items:center;
+    margin-top:50px;
+    margin-bottom: 20px;
+    margin-left: auto;
+    margin-right: auto;
+    width: 20%;
+}
+
+.button:hover, .button1:hover {
+    background-color: #0056b3;
+}
+
+/* 表单控件样式 */
+.form-control {
+    background-color: #f1f1f1;
+    color: #212529;
+    border: 1px solid #007bff;
+    border-radius: 5px;
+}
+input {
+    outline:none;
+}
+
+input[type="text"], input[type="email"], input[type="password"], textarea {
+    width: 100%;
+    height: 3vh;
+    padding: 15px 0px;
+    margin-bottom:10px;
+    background-color: #f4f4f9;
+}
+.div_input{
+    position: relative;
+    width: 100%;
+    height: 40px;
+}
+
+.div_input input{
+    height: 100%;
+    width: 100%;
+    border: none;
+    font-size: 17px;
+    border-bottom: 2px solid silver;
+}
+label{
+    margin-top:15px;
+}
+
+.div_input input:focus ~ label,
+.div_input input:valid ~ label{
+    color: #4158d0;
+    transform: translateY(-20px);
+}
+.div_input label{
+    position: absolute;
+    bottom: 10px;
+    left: 0;
+    color: grey;
+    pointer-events: none;
+    transition: all 0.4s ease;
+}
+
+.div_input .underline{
+    position: absolute;
+    bottom: 0px;
+    height: 2px;
+    width: 100%;
+}
+
+.div_input .underline::before{
+    position: absolute;
+    content: '';
+    height: 100%;
+    width: 100%;
+    background: #4158d0;
+    transform: scaleX(0);
+}
+.div_input input:focus ~ .underline::before,
+.div_input input:valid ~ .underline::before{
+    transform: scaleX(1);
+
+}
+
+
+.form-control::placeholder {
+    color: #6c757d;
+}
+
+.form-control:focus {
+    border-color: #0056b3;
+    box-shadow: none;
+}
+
+/* 文件预览 */
+.file-preview .preview-img {
+    max-width: calc(100% - 10px);
+    height: auto;
+}
+
+.file-preview .preview-video {
+    max-width: calc(100% - 10px);
+    height: auto;
+}
+
+.file-preview .preview-pdf {
+    width: calc(100% - 10px);
+}
+
+/* 搜索框样式 */
+.search-form {
+    margin-bottom: 20px;
+}
+
+.search-form .form-control {
+    border:1px solid #ccc;
+    padding:7px 0px;border-radius:3px;
+    padding-left:5px;
+    -webkit-box-shadow:inset 0 1px 1px rgba(0,0,0,.075);
+    box-shadow:inset 0 1px 1px rgba(0,0,0,.075);
+    -webkit-transition:border-color ease-in-out .15s,-webkit-box-shadow ease-in-out .15s;
+    -o-transition:border-color ease-in-out .15s,box-shadow ease-in-out .15s;
+    transition:border-color ease-in-out .15s,box-shadow ease-in-out .15s
+    height: 3vh;
+    padding: 20px 0px;
+}
+.search-form .form-control:focus {
+    border-color:#66afe9;outline:0;
+    -webkit-box-shadow:inset 0 1px 1px rgba(0,0,0,.075),0 0 8px rgba(102,175,233,.6);
+    box-shadow:inset 0 1px 1px rgba(0,0,0,.075),0 0 8px rgba(102,175,233,.6);
+}
+
+.search-form .button {
+    width: 100px;
+}
+
+/* 提示消息 */
+.alert-list {
+    list-style: none;
+    padding: 0;
+}
+
+.alert {
+    padding: 10px;
+    margin-bottom: 10px;
+    border-radius: 5px;
+}
+
+.alert-success {
+    background-color: #d4edda;
+    color: #155724;
+}
+
+.alert-danger {
+    background-color: #f8d7da;
+    color: #721c24;
+}
+
+/* 文件列表表格 */
+.table-striped tbody tr:nth-of-type(odd) {
+    background-color: rgba(255,255,255,0);
+}
+
+/* 文件管理页面 */
+.pagination {
+    margin-top: 20px;
+    display: flex;
+    justify-content: center;
+}
+
+.page-link {
+    margin: 0 5px;
+    padding: 10px 15px;
+    background-color: #007bff;
+    color: #fff;
+    border-radius: 5px;
+    text-decoration: none;
+}
+
+.page-link:hover {
+    background-color: #0056b3;
+}
+
+/* 响应式布局 */
+@media (max-width: 1200px) {
+    .container {
+        max-width: 1000px;
+        padding: 15px;
+    }
+}
+
+@media (max-width: 992px) {
+    .container {
+        max-width: 750px;
+        padding: 10px;
+    }
+
+    .navbar-nav .nav-link {
+        font-size: 14px;
+    }
+}
+
+@media (max-width: 768px) {
+    .container {
+        max-width: 500px;
+        padding: 5px;
+    }
+
+    .navbar-nav .nav-link {
+        font-size: 12px;
+    }
+
+    h1, h2 {
+        font-size: 24px;
+    }
+
+    .button, .button1 {
+        font-size: 12px;
+        padding: 6px 12px;
+    }
+
+    .table {
+        font-size: 12px;
+    }
+
+    .table th, .table td {
+        padding: 8px;
+    }
+}
+
+@media (max-width: 576px) {
+    .container {
+        max-width: 100%;
+        padding: 5px;
+    }
+
+    .navbar-nav .nav-link {
+        font-size: 10px;
+    }
+
+    h1, h2 {
+        font-size: 20px;
+    }
+
+    .button, .button1 {
+        font-size: 10px;
+        padding: 4px 8px;
+    }
+
+    .table {
+        font-size: 10px;
+    }
+
+    .table th, .table td {
+        padding: 5px;
+    }
+
+    /* 表单控件在小屏幕上的样式调整 */
+    input[type="text"], input[type="email"], input[type="password"], textarea {
+        height: auto;
+        padding: 10px;
+    }
+
+    .search-form .form-control {
+        padding: 5px;
+    }
+
+    .search-form .button {
+        width: auto;
+        padding: 5px 10px;
+    }
+
+    /* 按钮在小屏幕上的样式调整 */
+    .button, .button1 {
+        font-size: 12px;
+        padding: 6px 12px;
+    }
+
+    /* 表格在小屏幕上的样式调整 */
+    .table th, .table td {
+        padding: 5px;
+        font-size: 12px;
+    }
+}

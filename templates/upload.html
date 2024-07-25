@@ -1,0 +1,68 @@
+<!-- upload.html -->
+
+{% extends "base.html" %}
+
+{% block content %}
+<section>
+    <h1>上传文件</h1>
+    <form class="upload-form" enctype="multipart/form-data" id="upload-form" method="POST">
+        <label for="file">选择文件：</label>
+        <input id="file" name="file" required type="file">
+        <label for="description">描述：</label>
+        <textarea id="description" name="description"></textarea>
+        <button class="button" type="submit">上传文件</button>
+    </form>
+    <progress id="progress-bar" max="100" style="width: 100%; display: none;" value="0"></progress>
+    <div id="progress-status"></div>
+
+    {% with messages = get_flashed_messages(with_categories=true) %}
+    {% if messages %}
+    <ul class="alert-list">
+        {% for category, message in messages[-3:] %}
+        <li class="alert alert-{{ category }}">{{ message }}</li>
+        {% endfor %}
+    </ul>
+    {% endif %}
+    {% endwith %}
+    <a class="button" href="{{ url_for('files') }}">返回文件列表</a>
+</section>
+
+<script>
+    document.getElementById('upload-form').addEventListener('submit', function(event) {
+        event.preventDefault();
+
+        const form = event.target;
+        const formData = new FormData(form);
+        const progressBar = document.getElementById('progress-bar');
+        const progressStatus = document.getElementById('progress-status');
+
+        const xhr = new XMLHttpRequest();
+        xhr.open('POST', form.action, true);
+
+        xhr.upload.addEventListener('progress', function(event) {
+            if (event.lengthComputable) {
+                const percentComplete = (event.loaded / event.total) * 100;
+                progressBar.value = percentComplete;
+                progressStatus.textContent = `上传进度: ${Math.round(percentComplete)}%`;
+            }
+        });
+
+        xhr.addEventListener('load', function() {
+            if (xhr.status === 200) {
+                const response = JSON.parse(xhr.responseText);
+                alert(response.message);
+                if (response.filename) {
+                    window.location.href = "{{ url_for('file_manager') }}";
+                }
+            } else {
+                alert('上传失败，请重试。');
+            }
+        });
+
+        progressBar.style.display = 'block';
+        progressBar.value = 0;
+        progressStatus.textContent = '上传进度: 0%';
+        xhr.send(formData);
+    });
+</script>
+{% endblock %}

@@ -1,0 +1,35 @@
+{% extends "base.html" %}
+
+{% block content %}
+<section>
+    <h1>注册</h1>
+    <form class="register-form" method="POST">
+        <label class="div_input" for="username">
+            <input id="username" name="username" required type="text">
+            <div class="underline"></div>
+            <label>用户名</label>
+        </label>
+        <label class="div_input" for="email">
+            <input id="email" name="email" required type="email">
+            <div class="underline"></div>
+            <label>电子邮件</label>
+        </label>
+        <label class="div_input" for="password">
+            <input id="password" name="password" required type="password">
+            <div class="underline"></div>
+            <label>密码</label>
+        </label>
+        <button class="button1" type="submit">注册</button>
+    </form>
+    <p>已有账户？<a class="link" href="{{ url_for('login') }}">立即登录</a></p>
+    {% with messages = get_flashed_messages(with_categories=true) %}
+    {% if messages %}
+    <ul class="alert-list">
+        {% for category, message in messages[-3:] %}
+        <li class="alert alert-{{ category }}">{{ message }}</li>
+        {% endfor %}
+    </ul>
+    {% endif %}
+    {% endwith %}
+</section>
+{% endblock %}
