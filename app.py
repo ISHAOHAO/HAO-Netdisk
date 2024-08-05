@@ -4,10 +4,10 @@ import secrets
 import threading
 import uuid
 import webbrowser
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from tkinter import Tk, Toplevel, Listbox, END, ACTIVE, StringVar, Label, Entry, Button, OptionMenu
 from tkinter import messagebox
-
+import tkinter as tk
 import requests
 from flask import Flask, request, redirect, url_for, render_template, session, flash, send_from_directory, jsonify
 from flask_mail import Mail, Message
@@ -28,6 +28,9 @@ app.config['MAIL_USE_SSL'] = False
 app.config['MAIL_DEFAULT_SENDER'] = 'hao_netdisk@163.com'
 mail = Mail(app)
 db = SQLAlchemy(app)
+
+# 版本信息
+current_version = "v1.2.5"  # 当前版本
 
 
 # 获取所有地址，筛选出公网地址
@@ -273,32 +276,33 @@ def file_manager():
     if request.method == 'POST':
         file_id = request.form.get('file_id')
         action = request.form.get('action')
-        file = File.query.get(file_id)
+        file = db.session.get(File, file_id)
+
         if action == 'delete' and file:
             os.remove(os.path.join(app.config['UPLOAD_FOLDER'], file.filename))
             db.session.delete(file)
             db.session.commit()
             flash(f'文件 {file.filename} 删除成功！', 'success')
             log_event(f'文件 {file.filename} 删除成功！')
-        elif action == 'update_description' and file:
+        elif 'update_description' in request.form and file:
             new_description = request.form.get('description')
             file.description = new_description
             db.session.commit()
-            flash(f'文件 {file.filename} 原描述 {file.description} 更新为 {new_description}。', 'success')
-            log_event(f'文件 {file.filename} 描述 {file.description} 更新为 {new_description} ')
+            flash(f'文件 {file.filename} 描述更新成功。', 'success')
+            log_event(f'文件 {file.filename} 描述更新为 {new_description} ')
         elif action == 'update_visibility' and file:
             file.is_public = not file.is_public
             db.session.commit()
-            flash(f'文件 {file.filename} 显示状态更改为 {file.is_public and "不公开" or "公开"}', 'success')
-            log_event(f'文件 {file.filename} 显示状态更改为 {file.is_public and "不公开" or "公开"} ')
+            flash(f'文件 {file.filename} 显示状态更改为 {"公开" if file.is_public else "不公开"}', 'success')
+            log_event(f'文件 {file.filename} 显示状态更改为 {"公开" if file.is_public else "不公开"} ')
         elif action == 'create_share_link' and file:
             share_link = secrets.token_urlsafe(16)
             file.share_link = share_link
             file.share_password = request.form.get('password')
-            file.share_expiration = datetime.utcnow() + timedelta(days=1)  # 过期时间设置为1天
+            file.share_expiration = datetime.now(timezone.utc) + timedelta(days=1)  # 过期时间设置为1天
             db.session.commit()
             flash(
-                f'文件 {file.filename} 分享链接已创建 http://[{file.share_link}]:/share/{file.share_link} 密码：{file.share_password} ',
+                f'文件 {file.filename} 分享链接已创建 http://[yourdomain]/share/{file.share_link} 密码：{file.share_password} ',
                 'success')
             log_event(f'文件 {file.filename} 分享链接已创建 {file.share_link} 密码：{file.share_password} ')
         elif action == 'delete_share_link' and file:
@@ -308,6 +312,7 @@ def file_manager():
             db.session.commit()
             flash(f'文件 {file.filename} 分享链接已删除。', 'success')
             log_event(f'文件 {file.filename} 分享链接已删除 ')
+
     user_files = File.query.filter_by(user_id=session['user_id']).all()
     return render_template('file_manager.html', files=user_files)
 
@@ -338,10 +343,10 @@ def delete_file():
         if file:
             db.session.delete(file)
             db.session.commit()
-            return jsonify({'status': 'success', 'message': f'File {filename} deleted successfully!'}), 200
+            return jsonify({'status': 'success', 'message': f'文件 {filename} 已成功删除!'}), 200
         else:
-            return jsonify({'status': 'error', 'message': f'File {filename} not found!'}), 404
-    return jsonify({'status': 'error', 'message': 'Invalid request!'}), 400
+            return jsonify({'status': 'error', 'message': f'文件 {filename} 未找到!'}), 404
+    return jsonify({'status': 'error', 'message': '无效请求!'}), 400
 
 
 def start_flask_app(host, port, stop_event):
@@ -366,11 +371,150 @@ def open_browser(url):
     webbrowser.open(url)
 
 
+class VersionChecker:
+    def __init__(self, root):
+        self.root = root
+
+        counter = 0
+
+        Menubar = tk.Menu(root)
+
+        # 创建文件菜单
+        FileMenu = tk.Menu(Menubar, tearoff=0)
+        Menubar.add_cascade(label='帮助', menu=FileMenu)
+        FileMenu.add_command(label='关于协议选择', command=self.show_agreement_info)
+        FileMenu.add_command(label='关于端口设置', command=self.show_port_info)
+        FileMenu.add_command(label='关于', command=self.show_about_info)
+        FileMenu.add_separator()
+        FileMenu.add_command(label='查看日志', command=self.show_log_info)
+        FileMenu.add_command(label='上传文件目录', command=self.show_folder_info)
+
+        # 创建联系我们菜单
+        Contact = tk.Menu(Menubar, tearoff=0)
+        Menubar.add_cascade(label='联系我们', menu=Contact)
+        Contact.add_command(label='发送邮件', command=self.send_email)
+        Contact.add_command(label='我的网站', command=self.open_website)
+
+        # 添加退出菜单项
+        Menubar.add_cascade(label='退出', command=root.quit)
+
+        # 配置菜单栏
+        root.config(menu=Menubar)
+
+    # 打开上传目录文件夹
+    def show_folder_info(self):
+        try:
+            # 打开上传目录文件夹
+            os.startfile(app.config['UPLOAD_FOLDER'])
+        except FileNotFoundError:
+            tk.messagebox.showerror('错误', '找不到上传目录文件夹')
+            log_event(f'找不到上传目录文件夹')
+
+    # 显示日志信息
+    def show_log_info(self):
+        try:
+            with open('app.log', 'r') as file:
+                log_content = file.read()
+
+            # 创建一个新的窗口来显示日志
+            log_window = tk.Toplevel(self.root)
+            log_window.title('日志信息')
+
+            # 创建一个文本框来显示日志内容
+            text_box = tk.Text(log_window, wrap=tk.WORD)
+            text_box.insert(tk.END, log_content)
+            text_box.configure(state='disabled')  # 设置为只读
+            text_box.pack(side=tk.TOP, fill=tk.BOTH, expand=True)
+
+            # 滚动条
+            scrollbar = tk.Scrollbar(log_window)
+            scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
+            text_box.config(yscrollcommand=scrollbar.set)
+            scrollbar.config(command=text_box.yview)
+
+        except FileNotFoundError:
+            tk.messagebox.showerror('错误', '找不到日志文件 "app.log"')
+            log_event(f'找不到日志文件 "app.log"')
+        except Exception as e:
+            tk.messagebox.showerror('错误', f'读取日志文件时发生错误: {e}')
+            log_event(f'读取日志文件时发生错误: {e}')
+
+    # 显示协议信息
+    def show_agreement_info(self):
+        import socket
+        # 尝试创建一个IPv6的socket连接
+        supports_ipv6 = False
+        try:
+            sock = socket.socket(socket.AF_INET6, socket.SOCK_STREAM)
+            # 连接到一个已知支持IPv6的地址
+            sock.connect(('2001:4860:4860::8888', 53))
+            supports_ipv6 = True
+        except (socket.error, socket.gaierror):
+            pass
+        finally:
+            sock.close()
+
+        ipv6_status = "支持" if supports_ipv6 else "不支持"
+        message = (
+            f"当前网络{ipv6_status}IPv6。\n"
+            "选择IPv6时，需要确保您的网络开启了IPv6，否则无法使用。\n"
+            "选择IPv4时，需要确保您的网络运营商给您分配IPv4公网IP地址。"
+        )
+        messagebox.showinfo("关于协议选择", message)
+
+    # 显示端口信息
+    def show_port_info(self):
+        messagebox.showinfo("关于端口设置", "端口可以进行随意设置,但需要确保端口未被占用。")
+
+    # 显示关于信息
+    def show_about_info(self):
+        messagebox.showinfo("关于", f"HAO-Netdisk网盘系统。\n版本: {current_version}\nHAOHAO版权所有 © 2024")
+
+    # 发送邮件
+    def send_email(self):
+        webbrowser.open("mailto:mdh233@126.com")
+
+    # 打开网站
+    def open_website(self):
+        webbrowser.open("http://ishaohao.cn")
+
+        # 配置信息
+        self.ACCESS_TOKEN = "4af13024a4e20b212c998c308df5ca33"
+        self.REPO_PATH = "is-haohao/HAO-Netdisk"
+        self.API_URL = f"https://gitee.com/api/v5/repos/{self.REPO_PATH}/releases/latest"
+
+        # 创建检测版本按钮
+        self.check_button = tk.Button(self.root, text="检查最新版本", font=("Arial", 14), command=self.check_version,
+                                      bg="#ffffff", fg="#000000", width=12)
+        self.check_button.pack(pady=20)
+
+    def check_version(self):
+        # 发送请求获取最新版本信息
+        headers = {"Authorization": f"token {self.ACCESS_TOKEN}"}
+        response = requests.get(self.API_URL, headers=headers)
+        if response.status_code == 200:
+            latest_release = response.json()
+            latest_version = latest_release['tag_name']
+            text_version = latest_version[3:]
+            if latest_version > current_version:
+                # 显示确认对话框，让用户选择是否更新
+                answer = messagebox.askyesno("更新提示", f"发现新版本 {latest_version}，是否立即下载更新？")
+                if answer:
+                    webbrowser.open(
+                        f"https://gitee.com/is-haohao/HAO-Netdisk/releases/download/{latest_version}/HAO-Netdisk_{text_version}.zip")
+                    log_event(f"用户已选择更新，正在打开浏览器下载最新版本 {latest_version}。")
+            else:
+                messagebox.showinfo("版本信息", "当前已是最新版本。")
+        else:
+            messagebox.showerror("错误", "无法获取版本信息，请检查网络连接或访问令牌。")
+            log_event("无法获取版本信息，请检查网络连接或访问令牌。")
+
+
 class NetdiskLauncher:
     def __init__(self, master):
         self.master = master
         self.master.title("HAO-Netdisk 启动器")
-        self.master.geometry("800x700")
+        self.master.geometry("1060x680")
         self.master.configure(bg="#2e3a4f")
         self.master.resizable(False, False)
         self.stop_event = threading.Event()
@@ -434,6 +578,9 @@ class NetdiskLauncher:
 
         self.status_label = Label(self.master, text="", font=("Arial", 12), bg="#2e3a4f", fg="#ffffff")
         self.status_label.pack(pady=10)
+
+        #  VersionChecker 组件
+        self.version_checker = VersionChecker(self.master)
 
     def update_protocol(self, value):
         if value == "IPv6":
@@ -526,6 +673,7 @@ class NetdiskLauncher:
             response.raise_for_status()
         except requests.RequestException as e:
             messagebox.showerror("错误", f"无法获取文件列表！\n{e}")
+            log_event(f"无法获取文件列表！\n{e}")
             return
 
         files = response.json()
@@ -549,10 +697,13 @@ class NetdiskLauncher:
                     response.raise_for_status()
                     if response.status_code == 200:
                         messagebox.showinfo("信息", f"文件 '{selected_file}' 已删除！")
+                        log_event(f"管理员已删除文件 '{selected_file}' ！")
                     else:
                         messagebox.showerror("错误", f"文件 '{selected_file}' 删除失败！")
+                        log_event(f"管理员删除文件 '{selected_file}' 失败！")
                 except requests.RequestException as e:
                     messagebox.showerror("错误", f"文件 '{selected_file}' 删除失败！\n{e}")
+                    log_event(f"管理员删除文件 '{selected_file}' 失败！\n{e}")
             dialog.destroy()
 
         Button(dialog, text="删除文件", command=delete_file, font=("Arial", 12)).pack(pady=10)
@@ -571,4 +722,5 @@ if __name__ == "__main__":
 
     root = Tk()
     app_gui = NetdiskLauncher(root)
+    log_event("网盘启动器启动！")
     root.mainloop()

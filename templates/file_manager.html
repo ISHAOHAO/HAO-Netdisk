@@ -10,6 +10,7 @@
             <th>描述</th>
             <th>大小</th>
             <th>上传时间</th>
+            <th>分享</th>
             <th>操作</th>
         </tr>
         </thead>
@@ -47,6 +48,18 @@
                     <button class="button" name="action" type="submit" value="update_visibility">{{ file.is_public and
                         "设为不公开" or "设为公开" }}
                     </button>
+                </form>
+            </td>
+
+            <td>
+                <form method="POST" style="display:inline;">
+                    <label class="div_input">
+                        <input name="file_id" type="hidden" value="{{ file.id }}">
+                        <input name="description" type="text" value="{{ file.description }}">
+                        <div class="underline"></div>
+                        <label>更新描述</label>
+                    </label>
+                    <button class="button" name="update_description" type="submit">更新描述</button>
                 </form>
                 <form action="{{ url_for('file_manager') }}" class="d-inline-block" method="post">
                     <input name="file_id" type="hidden" value="{{ file.id }}">
