@@ -375,6 +375,16 @@ class VersionChecker:
     def __init__(self, root):
         self.root = root
 
+        # 配置信息
+        self.ACCESS_TOKEN = "4af13024a4e20b212c998c308df5ca33"
+        self.REPO_PATH = "is-haohao/HAO-Netdisk"
+        self.API_URL = f"https://gitee.com/api/v5/repos/{self.REPO_PATH}/releases/latest"
+
+        # 创建检测版本按钮
+        self.check_button = tk.Button(self.root, text="检查最新版本", font=("Arial", 14), command=self.check_version,
+                                      bg="#ffffff", fg="#000000", width=12)
+        self.check_button.pack(pady=20)
+
         counter = 0
 
         Menubar = tk.Menu(root)
@@ -477,16 +487,6 @@ class VersionChecker:
     # 打开网站
     def open_website(self):
         webbrowser.open("http://ishaohao.cn")
-
-        # 配置信息
-        self.ACCESS_TOKEN = "4af13024a4e20b212c998c308df5ca33"
-        self.REPO_PATH = "is-haohao/HAO-Netdisk"
-        self.API_URL = f"https://gitee.com/api/v5/repos/{self.REPO_PATH}/releases/latest"
-
-        # 创建检测版本按钮
-        self.check_button = tk.Button(self.root, text="检查最新版本", font=("Arial", 14), command=self.check_version,
-                                      bg="#ffffff", fg="#000000", width=12)
-        self.check_button.pack(pady=20)
 
     def check_version(self):
         # 发送请求获取最新版本信息
