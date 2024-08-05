@@ -30,7 +30,7 @@ mail = Mail(app)
 db = SQLAlchemy(app)
 
 # 版本信息
-current_version = "v1.2.5"  # 当前版本
+current_version = "v1.2.8"  # 当前版本
 
 
 # 获取所有地址，筛选出公网地址
@@ -495,7 +495,7 @@ class VersionChecker:
         if response.status_code == 200:
             latest_release = response.json()
             latest_version = latest_release['tag_name']
-            text_version = latest_version[3:]
+            text_version = latest_version[1:]
             if latest_version > current_version:
                 # 显示确认对话框，让用户选择是否更新
                 answer = messagebox.askyesno("更新提示", f"发现新版本 {latest_version}，是否立即下载更新？")
