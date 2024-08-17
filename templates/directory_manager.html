@@ -1,0 +1,96 @@
+{% extends "base.html" %}
+
+{% block content %}
+<section>
+    <h1>目录管理 - {{ directory.description }}</h1>
+
+    <table class="table table-striped">
+        <thead>
+        <tr>
+            <th>文件名</th>
+            <th>描述</th>
+            <th>大小</th>
+            <th>上传时间</th>
+            <th>分享</th>
+            <th>操作</th>
+        </tr>
+        </thead>
+        <tbody>
+        {% for file in files %}
+        <tr>
+            <td>{{ file.filename }}</td>
+            <td>{{ file.description }}</td>
+            <td>{{ file.file_size|filesizeformat }}</td>
+            <td>{{ file.upload_time.strftime('%Y-%m-%d %H:%M:%S') }}</td>
+            <td>
+                {% if file.share_link %}
+                <a class="button" href="{{ url_for('share_file', share_link=file.share_link) }}"
+                   target="_blank">查看分享链接</a>
+                <form action="{{ url_for('directory_manager', directory_id=directory.id) }}" class="d-inline-block"
+                      method="post">
+                    <input name="file_id" type="hidden" value="{{ file.id }}">
+                    <input name="action" type="hidden" value="delete_share_link">
+                    <button class="button" type="submit">删除分享链接</button>
+                </form>
+                {% else %}
+                <form action="{{ url_for('directory_manager', directory_id=directory.id) }}" class="d-inline-block"
+                      method="post">
+                    <input name="file_id" type="hidden" value="{{ file.id }}">
+                    <input name="action" type="hidden" value="create_share_link">
+                    <label class="div_input">
+                        <input name="password" type="text">
+                        <div class="underline"></div>
+                        <label>设置密码</label>
+                    </label>
+                    <button class="button" type="submit">创建分享链接</button>
+                </form>
+                {% endif %}
+                <form method="post" style="display: inline;">
+                    <input name="file_id" type="hidden" value="{{ file.id }}">
+                    <input name="action" type="hidden" value="update_visibility">
+                    <button class="button" type="submit">{{ file.is_public and "设为不公开" or "设为公开" }}</button>
+                </form>
+            </td>
+            <td>
+                <form method="POST" style="display:inline;">
+                    <input name="file_id" type="hidden" value="{{ file.id }}">
+                    <input name="action" type="hidden" value="update_description">
+                    <label class="div_input">
+                        <input name="description" type="text" value="{{ file.description }}">
+                        <div class="underline"></div>
+                        <label>更新描述</label>
+                    </label>
+                    <button class="button" type="submit">更新描述</button>
+                </form>
+                <form action="{{ url_for('directory_manager', directory_id=directory.id) }}" class="d-inline-block"
+                      method="post">
+                    <input name="file_id" type="hidden" value="{{ file.id }}">
+                    <input name="action" type="hidden" value="delete">
+                    <button class="button" onclick="return confirmDelete('{{ file.filename }}')" type="submit">
+                        删除文件
+                    </button>
+                </form>
+            </td>
+        </tr>
+        {% endfor %}
+        </tbody>
+    </table>
+
+    {% with messages = get_flashed_messages(with_categories=true) %}
+    {% if messages %}
+    <ul class="alert-list">
+        {% for category, message in messages[-3:] %}
+        <li class="alert alert-{{ category }}">{{ message }}</li>
+        {% endfor %}
+    </ul>
+    {% endif %}
+    {% endwith %}
+
+    <a class="button" href="{{ url_for('file_manager') }}">返回文件管理</a>
+</section>
+<script>
+    function confirmDelete(filename) {
+        return confirm('确定要删除文件 ' + filename + ' 吗？');
+    }
+</script>
+{% endblock %}

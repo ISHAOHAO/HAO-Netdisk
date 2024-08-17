@@ -30,7 +30,7 @@ mail = Mail(app)
 db = SQLAlchemy(app)
 
 # 版本信息
-current_version = "v1.2.8"  # 当前版本
+current_version = "v1.3.7"  # 当前版本
 
 
 # 获取所有地址，筛选出公网地址
@@ -82,6 +82,16 @@ class File(db.Model):
     share_password = db.Column(db.String(100))
     share_expiration = db.Column(db.DateTime)
     is_public = db.Column(db.Boolean, default=True)  # 是否公开显示给所有人
+    directory_id = db.Column(db.Integer, db.ForeignKey('directory.id'))  # 添加目录字段
+
+
+class Directory(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    description = db.Column(db.String(200), nullable=False)
+    upload_time = db.Column(db.DateTime, default=db.func.current_timestamp())
+    user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
+    files = db.relationship('File', backref='directory', lazy=True)
+    is_public = db.Column(db.Boolean, default=True)  # 目录公开状态字段
 
 
 if not os.path.exists(app.config['UPLOAD_FOLDER']):
@@ -190,40 +200,71 @@ def upload():
         return redirect(url_for('login'))
 
     if request.method == 'POST':
-        file = request.files.get('file')
+        files = request.files.getlist('file')
         description = request.form.get('description')
 
-        if file:
-            filename = secure_filename(file.filename)
-            base_filename, file_extension = os.path.splitext(filename)
-            counter = 1
+        if files:
+            if len(files) > 1:
+                # 上传多个文件时创建目录
+                directory = Directory(description=description, user_id=session['user_id'])
+                db.session.add(directory)
+                db.session.commit()
+                directory_id = directory.id
+            else:
+                directory_id = None
 
-            while os.path.exists(os.path.join(app.config['UPLOAD_FOLDER'], filename)):
-                filename = f"{base_filename}({counter}){file_extension}"
-                counter += 1
+            for file in files:
+                filename = secure_filename(file.filename)
+                base_filename, file_extension = os.path.splitext(filename)
+                counter = 1
 
-            filepath = os.path.join(app.config['UPLOAD_FOLDER'], filename)
-            file.save(filepath)
-            file_size = os.path.getsize(filepath)
-            new_file = File(filename=filename, description=description, file_size=file_size, user_id=session['user_id'])
-            db.session.add(new_file)
+                while os.path.exists(os.path.join(app.config['UPLOAD_FOLDER'], filename)):
+                    filename = f"{base_filename}({counter}){file_extension}"
+                    counter += 1
+
+                filepath = os.path.join(app.config['UPLOAD_FOLDER'], filename)
+                file.save(filepath)
+                file_size = os.path.getsize(filepath)
+                new_file = File(filename=filename, description=description, file_size=file_size,
+                                user_id=session['user_id'], directory_id=directory_id)
+                db.session.add(new_file)
             db.session.commit()
-            flash(f'用户 {session["username"]} 上传了文件 {filename},文件描述为 {description}。', 'success')
-            log_event(f'用户 {session["username"]} 上传了文件 {filename}。')
-            return jsonify({'message': '文件上传成功！', 'filename': filename})
+
+            flash(f'用户 {session["username"]} 上传了文件。', 'success')
+            log_event(f'用户 {session["username"]} 上传了文件。')
+            return jsonify({'message': '文件上传成功！'})
         else:
             flash('未选择文件。', 'danger')
-            return jsonify({'message': '未选择文件。', 'filename': ''})
+            return jsonify({'message': '未选择文件。'})
     return render_template('upload.html')
+
+
+@app.route('/directory/<int:directory_id>', methods=['GET'])
+def directory_detail(directory_id):
+    directory = Directory.query.get_or_404(directory_id)
+    page = request.args.get('page', 1, type=int)
+    files_query = File.query.filter_by(directory_id=directory_id).paginate(page=page, per_page=10)
+    return render_template('directory_detail.html', directory=directory, files=files_query)
 
 
 @app.route('/files', methods=['GET'])
 def files():
     search_query = request.args.get('search', '')
     page = request.args.get('page', 1, type=int)
-    files_query = File.query.filter(File.filename.like(f'%{search_query}%')).filter(
-        (File.is_public == True) | (File.user_id == session.get('user_id'))).paginate(page=page, per_page=10)
-    return render_template('files.html', files=files_query, search_query=search_query)
+
+    # 查询所有目录，如果是其他用户则只显示公开目录
+    directories_query = Directory.query.filter(
+        Directory.description.like(f'%{search_query}%')
+    ).filter(
+        (Directory.user_id == session.get('user_id')) | (Directory.files.any(File.is_public == True))
+    ).paginate(page=page, per_page=10)
+
+    # 显示不属于任何目录的公开文件或当前用户的文件
+    files_query = File.query.filter(File.directory_id.is_(None)).filter(File.filename.like(f'%{search_query}%')).filter(
+        (File.is_public == True) | (File.user_id == session.get('user_id'))
+    ).paginate(page=page, per_page=10)
+
+    return render_template('files.html', directories=directories_query, files=files_query, search_query=search_query)
 
 
 @app.route('/download/<filename>', methods=['GET', 'POST'])
@@ -274,47 +315,152 @@ def file_manager():
         return redirect(url_for('login'))
 
     if request.method == 'POST':
-        file_id = request.form.get('file_id')
+        item_id = request.form.get('item_id')
         action = request.form.get('action')
-        file = db.session.get(File, file_id)
+        item_type = request.form.get('item_type')
 
-        if action == 'delete' and file:
-            os.remove(os.path.join(app.config['UPLOAD_FOLDER'], file.filename))
-            db.session.delete(file)
+        if item_type == 'file':
+            item = db.session.get(File, item_id)
+        else:
+            item = db.session.get(Directory, item_id)
+
+        if action == 'delete' and item:
+            if item_type == 'file':
+                os.remove(os.path.join(app.config['UPLOAD_FOLDER'], item.filename))
+                db.session.delete(item)
+            elif item_type == 'directory':
+                # 获取该目录中的所有文件并删除
+                files_in_directory = File.query.filter_by(directory_id=item.id).all()
+                for file in files_in_directory:
+                    os.remove(os.path.join(app.config['UPLOAD_FOLDER'], file.filename))
+                    db.session.delete(file)
+
+                # 删除目录本身
+                db.session.delete(item)
+
             db.session.commit()
-            flash(f'文件 {file.filename} 删除成功！', 'success')
-            log_event(f'文件 {file.filename} 删除成功！')
-        elif 'update_description' in request.form and file:
+            flash(f'{item_type.capitalize()} {item.description} 删除成功！', 'success')
+            log_event(f'{item_type.capitalize()} {item.description} 删除成功！')
+
+        elif 'update_description' in request.form and item:
             new_description = request.form.get('description')
-            file.description = new_description
+            item.description = new_description
             db.session.commit()
-            flash(f'文件 {file.filename} 描述更新成功。', 'success')
-            log_event(f'文件 {file.filename} 描述更新为 {new_description} ')
-        elif action == 'update_visibility' and file:
-            file.is_public = not file.is_public
+            flash(f'{item_type.capitalize()} {item.description} 描述更新成功。', 'success')
+            log_event(f'{item_type.capitalize()} {item.description} 描述更新为 {new_description} ')
+        elif action == 'update_visibility' and item_type == 'file' and item:
+            item.is_public = not item.is_public
             db.session.commit()
-            flash(f'文件 {file.filename} 显示状态更改为 {"公开" if file.is_public else "不公开"}', 'success')
-            log_event(f'文件 {file.filename} 显示状态更改为 {"公开" if file.is_public else "不公开"} ')
-        elif action == 'create_share_link' and file:
+            flash(f'文件 {item.filename} 显示状态更改为 {"公开" if item.is_public else "不公开"}', 'success')
+            log_event(f'文件 {item.filename} 显示状态更改为 {"公开" if item.is_public else "不公开"} ')
+        elif action == 'update_directory_visibility' and item_type == 'directory' and item:
+            item.is_public = not item.is_public
+            db.session.commit()
+            flash(f'目录 {item.description} 显示状态更改为 {"公开" if item.is_public else "不公开"}', 'success')
+            log_event(f'目录 {item.description} 显示状态更改为 {"公开" if item.is_public else "不公开"} ')
+        elif action == 'create_share_link' and item_type == 'file' and item:
             share_link = secrets.token_urlsafe(16)
-            file.share_link = share_link
-            file.share_password = request.form.get('password')
-            file.share_expiration = datetime.now(timezone.utc) + timedelta(days=1)  # 过期时间设置为1天
+            item.share_link = share_link
+            item.share_password = request.form.get('password')
+            item.share_expiration = datetime.now(timezone.utc) + timedelta(days=1)  # 过期时间设置为1天
             db.session.commit()
+            ip_address = request.remote_addr
             flash(
-                f'文件 {file.filename} 分享链接已创建 http://[yourdomain]/share/{file.share_link} 密码：{file.share_password} ',
+                f'文件 {item.filename} 分享链接已创建 http://[{ip_address}]/share/{item.share_link} 密码：{item.share_password} ',
                 'success')
-            log_event(f'文件 {file.filename} 分享链接已创建 {file.share_link} 密码：{file.share_password} ')
-        elif action == 'delete_share_link' and file:
-            file.share_link = None
-            file.share_password = None
-            file.share_expiration = None
+            log_event(f'文件 {item.filename} 分享链接已创建 {item.share_link} 密码：{item.share_password} ')
+        elif action == 'delete_share_link' and item_type == 'file' and item:
+            item.share_link = None
+            item.share_password = None
+            item.share_expiration = None
             db.session.commit()
-            flash(f'文件 {file.filename} 分享链接已删除。', 'success')
-            log_event(f'文件 {file.filename} 分享链接已删除 ')
+            flash(f'文件 {item.filename} 分享链接已删除。', 'success')
+            log_event(f'文件 {item.filename} 分享链接已删除 ')
 
-    user_files = File.query.filter_by(user_id=session['user_id']).all()
-    return render_template('file_manager.html', files=user_files)
+    user_files = File.query.filter_by(user_id=session['user_id'], directory_id=None).all()
+    user_directories = Directory.query.filter_by(user_id=session['user_id']).all()
+    return render_template('file_manager.html', files=user_files, directories=user_directories)
+
+
+@app.route('/directory_manager/<int:directory_id>', methods=['GET', 'POST'])
+def directory_manager(directory_id):
+    if 'user_id' not in session:
+        return redirect(url_for('login'))
+
+    directory = Directory.query.get_or_404(directory_id)
+
+    if request.method == 'POST':
+        action = request.form.get('action')
+        file_id = request.form.get('file_id')
+
+        if action == 'delete' and file_id:
+            file = db.session.get(File, file_id)
+            if file:
+                os.remove(os.path.join(app.config['UPLOAD_FOLDER'], file.filename))
+                db.session.delete(file)
+                db.session.commit()
+                flash(f'文件 {file.filename} 删除成功！', 'success')
+                log_event(f'文件 {file.filename} 删除成功！')
+        elif action == 'update_visibility' and file_id:
+            file = db.session.get(File, file_id)
+            if file:
+                file.is_public = not file.is_public
+                db.session.commit()
+                flash(f'文件 {file.filename} 显示状态更改为 {"公开" if file.is_public else "不公开"}', 'success')
+                log_event(f'文件 {file.filename} 显示状态更改为 {"公开" if file.is_public else "不公开"} ')
+        elif action == 'create_share_link' and file_id:
+            file = db.session.get(File, file_id)
+            if file:
+                share_link = secrets.token_urlsafe(16)
+                file.share_link = share_link
+                file.share_password = request.form.get('password')
+                file.share_expiration = datetime.now(timezone.utc) + timedelta(days=1)  # 过期时间设置为1天
+                db.session.commit()
+                ip_address = request.remote_addr
+                flash(
+                    f'文件 {file.filename} 分享链接已创建 http://[{ip_address}]/share/{file.share_link} 密码：{file.share_password} ',
+                    'success')
+                log_event(f'文件 {file.filename} 分享链接已创建 {file.share_link} 密码：{file.share_password} ')
+        elif action == 'delete_share_link' and file_id:
+            file = db.session.get(File, file_id)
+            if file:
+                file.share_link = None
+                file.share_password = None
+                file.share_expiration = None
+                db.session.commit()
+                flash(f'文件 {file.filename} 分享链接已删除。', 'success')
+                log_event(f'文件 {file.filename} 分享链接已删除 ')
+
+    files = File.query.filter_by(directory_id=directory_id).all()
+    return render_template('directory_manager.html', directory=directory, files=files)
+
+
+@app.route('/upload_to_directory/<int:directory_id>', methods=['GET', 'POST'])
+def upload_file_to_directory(directory_id):
+    if 'user_id' not in session:
+        return redirect(url_for('login'))
+
+    directory = Directory.query.get_or_404(directory_id)
+
+    if request.method == 'POST':
+        file = request.files.get('file')
+        if file:
+            filename = secure_filename(file.filename)
+            file_path = os.path.join(app.config['UPLOAD_FOLDER'], filename)
+            file.save(file_path)
+            new_file = File(
+                filename=filename,
+                file_size=os.path.getsize(file_path),
+                user_id=session['user_id'],
+                directory_id=directory_id
+            )
+            db.session.add(new_file)
+            db.session.commit()
+            flash(f'文件 {filename} 上传成功！', 'success')
+            log_event(f'文件 {filename} 上传成功！')
+        return redirect(url_for('directory_manager', directory_id=directory_id))
+
+    return render_template('upload_to_directory.html', directory=directory)
 
 
 @app.route('/logout')
@@ -429,24 +575,32 @@ class VersionChecker:
             # 创建一个新的窗口来显示日志
             log_window = tk.Toplevel(self.root)
             log_window.title('日志信息')
+            log_window.geometry("700x500")
 
             # 创建一个文本框来显示日志内容
             text_box = tk.Text(log_window, wrap=tk.WORD)
             text_box.insert(tk.END, log_content)
             text_box.configure(state='disabled')  # 设置为只读
+
+            # 创建一个垂直滚动条
+            scroll_bar = tk.Scrollbar(log_window, orient=tk.VERTICAL)
+            scroll_bar.pack(side=tk.RIGHT, fill=tk.Y)
+
+            # 将滚动条与文本框关联
+            text_box.config(yscrollcommand=scroll_bar.set)
+            scroll_bar.config(command=text_box.yview)
+
+            # 将文本框和滚动条添加到窗口
             text_box.pack(side=tk.TOP, fill=tk.BOTH, expand=True)
 
-            # 滚动条
-            scrollbar = tk.Scrollbar(log_window)
-            scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
-            text_box.config(yscrollcommand=scrollbar.set)
-            scrollbar.config(command=text_box.yview)
+            # 默认滚动到文本框的末尾
+            text_box.see(tk.END)
 
         except FileNotFoundError:
-            tk.messagebox.showerror('错误', '找不到日志文件 "app.log"')
+            messagebox.showerror('错误', '找不到日志文件 "app.log"')
             log_event(f'找不到日志文件 "app.log"')
         except Exception as e:
-            tk.messagebox.showerror('错误', f'读取日志文件时发生错误: {e}')
+            messagebox.showerror('错误', f'读取日志文件时发生错误: {e}')
             log_event(f'读取日志文件时发生错误: {e}')
 
     # 显示协议信息

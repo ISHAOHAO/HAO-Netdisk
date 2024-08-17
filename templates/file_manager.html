@@ -6,7 +6,8 @@
     <table class="table table-striped">
         <thead>
         <tr>
-            <th>文件名</th>
+            <th>名称</th>
+            <th>类型</th>
             <th>描述</th>
             <th>大小</th>
             <th>上传时间</th>
@@ -15,9 +16,55 @@
         </tr>
         </thead>
         <tbody>
+        {% for directory in directories %}
+        <tr>
+            <td>{{ directory.description }}</td>
+            <td>目录</td>
+            <td>{{ directory.description }}</td>
+            <td>-</td>
+            <td>-</td>
+            <td>
+                {% if directory.is_public %}
+                <span>显示状态:公开</span>
+                {% else %}
+                <span>显示状态:不公开</span>
+                {% endif %}
+                <form action="{{ url_for('file_manager') }}" method="post" style="display: inline;">
+                    <input name="item_id" type="hidden" value="{{ directory.id }}">
+                    <input name="item_type" type="hidden" value="directory">
+                    <input name="action" type="hidden" value="update_directory_visibility">
+                    <button class="button" type="submit">{{ directory.is_public and "设为不公开" or "设为公开" }}
+                    </button>
+                </form>
+            </td>
+            <td>
+                <a class="button" href="{{ url_for('directory_manager', directory_id=directory.id) }}">管理目录</a>
+                <form method="POST" style="display:inline;">
+                    <label class="div_input">
+                        <input name="item_id" type="hidden" value="{{ directory.id }}">
+                        <input name="item_type" type="hidden" value="directory">
+                        <input name="description" type="text" value="{{ directory.description }}">
+                        <div class="underline"></div>
+                        <label>更新描述</label>
+                    </label>
+                    <button class="button" name="update_description" type="submit">更新描述</button>
+                </form>
+                <form action="{{ url_for('file_manager') }}" class="d-inline-block" method="post">
+                    <input name="item_id" type="hidden" value="{{ directory.id }}">
+                    <input name="item_type" type="hidden" value="directory">
+                    <input name="action" type="hidden" value="delete">
+                    <button class="button" onclick="return confirmDeleteDirectory('{{ directory.description }}')"
+                            type="submit">
+                        删除目录
+                    </button>
+                </form>
+            </td>
+        </tr>
+        {% endfor %}
         {% for file in files %}
         <tr style="border-bottom: 1px;border-bottom: 2px dotted;border-bottom: medium dashed blue;">
             <td>{{ file.filename }}</td>
+            <td>文件</td>
             <td>{{ file.description }}</td>
             <td>{{ file.file_size|filesizeformat }}</td>
             <td>{{ file.upload_time.strftime('%Y-%m-%d %H:%M:%S') }}</td>
@@ -26,13 +73,15 @@
                 <a class="button" href="{{ url_for('share_file', share_link=file.share_link) }}"
                    target="_blank">查看分享链接</a>
                 <form action="{{ url_for('file_manager') }}" class="d-inline-block" method="post">
-                    <input name="file_id" type="hidden" value="{{ file.id }}">
+                    <input name="item_id" type="hidden" value="{{ file.id }}">
+                    <input name="item_type" type="hidden" value="file">
                     <input name="action" type="hidden" value="delete_share_link">
                     <button class="button" type="submit">删除分享链接</button>
                 </form>
                 {% else %}
                 <form action="{{ url_for('file_manager') }}" class="d-inline-block" method="post">
-                    <input name="file_id" type="hidden" value="{{ file.id }}">
+                    <input name="item_id" type="hidden" value="{{ file.id }}">
+                    <input name="item_type" type="hidden" value="file">
                     <input name="action" type="hidden" value="create_share_link">
                     <label class="div_input">
                         <input name="password" type="text">
@@ -41,20 +90,26 @@
                     </label>
                     <button class="button" type="submit">创建分享链接</button>
                 </form>
-
                 {% endif %}
                 <form method="post" style="display: inline;">
-                    <input name="file_id" type="hidden" value="{{ file.id }}">
+                    <input name="item_id" type="hidden" value="{{ file.id }}">
+                    <input name="item_type" type="hidden" value="file">
+                    <br>
+                    {% if file.is_public %}
+                    <span>显示状态:公开</span>
+                    {% else %}
+                    <span>显示状态:不公开</span>
+                    {% endif %}
                     <button class="button" name="action" type="submit" value="update_visibility">{{ file.is_public and
                         "设为不公开" or "设为公开" }}
                     </button>
                 </form>
             </td>
-
             <td>
                 <form method="POST" style="display:inline;">
                     <label class="div_input">
-                        <input name="file_id" type="hidden" value="{{ file.id }}">
+                        <input name="item_id" type="hidden" value="{{ file.id }}">
+                        <input name="item_type" type="hidden" value="file">
                         <input name="description" type="text" value="{{ file.description }}">
                         <div class="underline"></div>
                         <label>更新描述</label>
@@ -62,7 +117,8 @@
                     <button class="button" name="update_description" type="submit">更新描述</button>
                 </form>
                 <form action="{{ url_for('file_manager') }}" class="d-inline-block" method="post">
-                    <input name="file_id" type="hidden" value="{{ file.id }}">
+                    <input name="item_id" type="hidden" value="{{ file.id }}">
+                    <input name="item_type" type="hidden" value="file">
                     <input name="action" type="hidden" value="delete">
                     <button class="button" onclick="return confirmDelete('{{ file.filename }}')" type="submit">
                         删除文件
@@ -91,6 +147,10 @@
 <script>
     function confirmDelete(filename) {
         return confirm('确定要删除文件 ' + filename + ' 吗？');
+    }
+
+    function confirmDeleteDirectory(directoryName) {
+        return confirm('确定要删除目录 ' + directoryName + ' 吗？此操作将删除该目录中的所有文件。');
     }
 </script>
 {% endblock %}

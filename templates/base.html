@@ -76,6 +76,36 @@
         .navbar-toggler-icon {
             background-image: url("data:image/svg+xml;charset=utf8,%3Csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 24 24'%3E%3Cpath stroke='%23fff' stroke-width='2' stroke-linecap='round' stroke-linejoin='round' d='M4 6h16M4 12h16m-7 6h7' /%3E%3C/svg%3E");
         }
+.water_tips {
+  position: absolute;
+  top: 70px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 100%;
+  height: 40rpx;
+  line-height: 34rpx;
+  border-radius: 20rpx;
+  background: rgba(0, 0, 0, 0.3);
+  overflow: hidden;
+  border: 2rpx solid rgba(255, 255, 255, 0.7);
+  box-sizing: border-box;
+}
+.water_text {
+    white-space: nowrap;
+    display: inline-block;
+    color: #fff;
+    font-size: 24rpx;
+    animation: 20s wordsLoop linear infinite normal;
+}
+
+@keyframes wordsLoop {
+  0% {
+    transform: translateX(100%);
+  }
+  100% {
+    transform: translateX(-100%);
+  }
+}
     </style>
 </head>
 <body>
@@ -117,6 +147,11 @@
         </div>
     </div>
 </nav>
+<!-- 广播条 -->
+<!--<view class="water_tips">
+    <view class="water_text">不注册即可下载文件，注册后即可上传文件&#38;&nbsp;所有内容仅供测试和学习交流。&emsp;&emsp;&emsp;&emsp;&emsp;&emsp;&emsp;&emsp;&emsp;&emsp;&emsp;&emsp;&emsp;&emsp;本站仅供删档版本测试使用，所有权归属 HAOHAO © 2024 所有！</view>
+</view>-->
+
 
 <!-- 加载动画 -->
 <div id="loading-overlay">

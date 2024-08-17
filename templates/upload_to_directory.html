@@ -1,0 +1,14 @@
+{% extends "base.html" %}
+
+{% block content %}
+<section>
+    <h1>上传到目录 - {{ directory.description }}</h1>
+    <form action="{{ url_for('upload_file_to_directory', directory_id=directory.id) }}" enctype="multipart/form-data"
+          method="POST">
+        <label for="file">选择文件</label>
+        <input id="file" name="file" required type="file">
+        <button class="button" type="submit">上传文件</button>
+    </form>
+    <a class="button" href="{{ url_for('directory_manager', directory_id=directory.id) }}">返回目录管理</a>
+</section>
+{% endblock %}

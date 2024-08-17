@@ -2,17 +2,12 @@
 
 {% block content %}
 <section>
-    <h1>文件列表</h1>
-    <form action="{{ url_for('files') }}" class="search-form" method="get">
-        <input class="form-control" name="search" placeholder="搜索文件..." type="text" value="{{ search_query }}">
-        <button class="button" type="submit">搜索</button>
-    </form>
+    <h1>目录: {{ directory.description }}</h1>
     <table class="table table-striped">
         <thead>
         <tr>
+            <th>文件名</th>
             <th>描述</th>
-            <th>类型</th>
-            <th>上传者</th>
             <th>大小</th>
             <th>上传时间</th>
             <th>操作</th>
@@ -20,24 +15,10 @@
         </tr>
         </thead>
         <tbody>
-        {% for directory in directories.items %}
-        <tr>
-            <td>{{ directory.description }}</td>
-            <td>目录</td>
-            <td>-</td>
-            <td>-</td>
-            <td>{{ directory.upload_time }}</td>
-            <td>
-                <a class="button" href="{{ url_for('directory_detail', directory_id=directory.id) }}">进入目录</a>
-            </td>
-            <td>-</td>
-        </tr>
-        {% endfor %}
         {% for file in files.items %}
         <tr style="border-bottom: 1px;border-bottom: 2px dotted;border-bottom: medium dashed blue;">
+            <td>{{ file.filename }}</td>
             <td>{{ file.description }}</td>
-            <td>文件</td>
-            <td>{{ file.uploader.username }}</td>
             <td>{{ file.file_size|filesizeformat }}</td>
             <td>{{ file.upload_time.strftime('%Y-%m-%d %H:%M:%S') }}</td>
             <td>
@@ -73,16 +54,18 @@
     </table>
     <div class="pagination">
         {% if files.has_prev %}
-        <a class="page-link" href="{{ url_for('files', page=files.prev_num, search=search_query) }}">上一页</a>
+        <a class="page-link" href="{{ url_for('directory_detail', directory_id=directory.id, page=files.prev_num) }}">上一页</a>
         {% endif %}
         {% for page_num in files.iter_pages() %}
         {% if page_num %}
-        <a class="page-link" href="{{ url_for('files', page=page_num, search=search_query) }}">{{ page_num }}</a>
+        <a class="page-link" href="{{ url_for('directory_detail', directory_id=directory.id, page=page_num) }}">{{
+            page_num }}</a>
         {% endif %}
         {% endfor %}
         {% if files.has_next %}
-        <a class="page-link" href="{{ url_for('files', page=files.next_num, search=search_query) }}">下一页</a>
+        <a class="page-link" href="{{ url_for('directory_detail', directory_id=directory.id, page=files.next_num) }}">下一页</a>
         {% endif %}
     </div>
+    <a class="button" href="{{ url_for('files') }}">返回文件列表</a>
 </section>
 {% endblock %}

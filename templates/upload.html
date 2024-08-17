@@ -7,7 +7,7 @@
     <h1>上传文件</h1>
     <form class="upload-form" enctype="multipart/form-data" id="upload-form" method="POST">
         <label for="file">选择文件：</label>
-        <input id="file" name="file" required type="file">
+        <input id="file" multiple name="file" required type="file">
         <label for="description">描述：</label>
         <textarea id="description" name="description"></textarea>
         <button class="button" type="submit">上传文件</button>
