@@ -3,12 +3,180 @@
 {% block content %}
 <section>
     <h1>上传到目录 - {{ directory.description }}</h1>
-    <form action="{{ url_for('upload_file_to_directory', directory_id=directory.id) }}" enctype="multipart/form-data"
-          method="POST">
+    <form action="{{ url_for('upload_file_to_directory', directory_id=directory.id) }}" class="upload-form" enctype="multipart/form-data"
+          id="upload-form" method="POST">
         <label for="file">选择文件</label>
-        <input id="file" name="file" required type="file">
+        <input id="file" name="file" onchange="updateFileInfo(this)" required type="file">
+        <div id="file-info"></div> <!-- 显示文件信息 -->
         <button class="button" type="submit">上传文件</button>
     </form>
+
+    <!-- 进度条和状态信息 -->
+    <progress id="progress-bar" max="100" style="width: 100%; display: none;" value="0"></progress>
+    <div id="progress-status"></div>
+
+    <!-- 消息提示 -->
+    {% with messages = get_flashed_messages(with_categories=true) %}
+    {% if messages %}
+    <ul class="alert-list">
+        {% for category, message in messages[-3:] %}
+        <li class="alert alert-{{ category }}">{{ message }}</li>
+        {% endfor %}
+    </ul>
+    {% endif %}
+    {% endwith %}
+
     <a class="button" href="{{ url_for('directory_manager', directory_id=directory.id) }}">返回目录管理</a>
+
 </section>
+
+<script>
+    document.getElementById('upload-form').addEventListener('submit', function(event) {
+        event.preventDefault();
+
+        const form = event.target;
+        const formData = new FormData(form);
+        const progressBar = document.getElementById('progress-bar');
+        const progressStatus = document.getElementById('progress-status');
+
+        const xhr = new XMLHttpRequest();
+        xhr.open('POST', form.action, true);
+
+        xhr.upload.addEventListener('progress', function(event) {
+            if (event.lengthComputable) {
+                const percentComplete = (event.loaded / event.total) * 100;
+                progressBar.value = percentComplete;
+                progressStatus.textContent = `上传进度: ${Math.round(percentComplete)}%`;
+            }
+        });
+
+        xhr.addEventListener('load', function() {
+            const response = JSON.parse(xhr.responseText);
+            alert(response.message);  // 显示提示信息
+            if (xhr.status === 200) {
+                window.location.href = "{{ url_for('files') }}";  // 上传成功后跳转
+            } else {
+                alert('上传失败，请重试。');
+            }
+        });
+
+        progressBar.style.display = 'block';
+        progressBar.value = 0;
+        progressStatus.textContent = '上传进度: 0%';
+        xhr.send(formData);
+    });
+</script>
+
+<style>
+    /* 基础重置 */
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+}
+
+body {
+    font-family: 'Arial', sans-serif;
+    background: #f4f4f4;
+    color: #333;
+    line-height: 1.6;
+}
+
+/* 页面布局 */
+section {
+    max-width: 600px;
+    margin: 40px auto;
+    padding: 20px;
+    background: #fff;
+    border-radius: 8px;
+    box-shadow: 0 4px 10px rgba(0, 0, 0, 0.1);
+}
+
+h1 {
+    text-align: center;
+    margin-bottom: 20px;
+    color: #444;
+}
+
+/* 表单样式 */
+.upload-form {
+    display: flex;
+    flex-direction: column;
+}
+
+.upload-form label {
+    margin-bottom: 5px;
+    font-weight: bold;
+}
+
+.upload-form input[type="file"],
+.upload-form textarea,
+.upload-form button {
+    padding: 10px;
+    margin-bottom: 15px;
+    border: none;
+    border-radius: 4px;
+    background: #e9ecef;
+    transition: all 0.3s ease;
+}
+
+.upload-form input[type="file"]:focus,
+.upload-form textarea:focus {
+    outline: none;
+    box-shadow: 0 0 0 2px #007bff;
+}
+
+.upload-form textarea {
+    min-height: 100px;
+    resize: vertical;
+}
+
+.upload-form button {
+    background: #007bff;
+    color: white;
+    cursor: pointer;
+    transition: background-color 0.3s ease;
+}
+
+.upload-form button:hover {
+    background: #0056b3;
+}
+
+/* 更新进度条的动画效果 */
+@keyframes energyPulse {
+    0% { background-position: 0%; }
+    100% { background-position: 100%; }
+}
+
+/* 更新进度条的颜色和渐变效果 */
+#progress-bar::-webkit-progress-value {
+    background: repeating-linear-gradient(
+        -45deg,
+        #4cd137,
+        #4cd137 10px,
+        #4cb4d1 10px,
+        #4cb4d1 20px
+    );
+    animation: energyPulse 2s infinite;
+    background-size: 200% 200%;
+}
+
+#progress-bar::-moz-progress-bar {
+    /* Firefox不支持background-size和animation，需要额外处理 */
+    background: linear-gradient(to right, #4cd137, #4cb4d1);
+}
+
+/* 鼠标悬停效果 */
+#progress-bar:hover {
+    box-shadow: 0 0 10px rgba(76, 180, 209, 0.7);
+}
+
+/* 进度条边框添加科技感 */
+#progress-bar {
+    border: 1px solid #4cb4d1; /* 添加边框 */
+    box-shadow: 0 0 5px rgba(76, 180, 209, 0.5); /* 添加阴影 */
+}
+
+
+</style>
 {% endblock %}

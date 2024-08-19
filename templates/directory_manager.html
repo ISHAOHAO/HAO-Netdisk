@@ -4,6 +4,17 @@
 <section>
     <h1>目录管理 - {{ directory.description }}</h1>
 
+    <!-- 更新目录描述的表单 -->
+    <form action="{{ url_for('directory_manager', directory_id=directory.id) }}" method="post">
+        <input name="action" type="hidden" value="update_directory_description">
+        <label class="div_input">
+            <input name="directory_description" type="text" value="{{ directory.description }}">
+            <div class="underline"></div>
+            <label>更新目录描述</label>
+        </label>
+        <button class="button" type="submit">更新目录描述</button>
+    </form>
+
     <table class="table table-striped">
         <thead>
         <tr>
@@ -52,6 +63,7 @@
                 </form>
             </td>
             <td>
+                <!-- 更新文件描述的表单 -->
                 <form method="POST" style="display:inline;">
                     <input name="file_id" type="hidden" value="{{ file.id }}">
                     <input name="action" type="hidden" value="update_description">
@@ -87,6 +99,7 @@
     {% endwith %}
 
     <a class="button" href="{{ url_for('file_manager') }}">返回文件管理</a>
+    <a class="button" href="{{ url_for('upload_file_to_directory', directory_id=directory.id) }}">上传文件到目录</a>
 </section>
 <script>
     function confirmDelete(filename) {

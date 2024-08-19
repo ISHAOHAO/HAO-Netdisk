@@ -92,6 +92,7 @@ class Directory(db.Model):
     user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
     files = db.relationship('File', backref='directory', lazy=True)
     is_public = db.Column(db.Boolean, default=True)  # 目录公开状态字段
+    uploader = db.relationship('User', backref='directories', lazy=True)  # 新增关联用户的关系
 
 
 if not os.path.exists(app.config['UPLOAD_FOLDER']):
@@ -205,19 +206,44 @@ def upload():
 
         if files:
             if len(files) > 1:
-                # 上传多个文件时创建目录
+                # 上传多个文件时创建目录，并设置目录的描述为表单中的 description
                 directory = Directory(description=description, user_id=session['user_id'])
                 db.session.add(directory)
                 db.session.commit()
                 directory_id = directory.id
+
+                for file in files:
+                    filename = secure_filename(file.filename)
+                    base_filename, file_extension = os.path.splitext(filename)
+                    counter = 1
+
+                    # 防止文件名重复
+                    while os.path.exists(os.path.join(app.config['UPLOAD_FOLDER'], filename)):
+                        filename = f"{base_filename}({counter}){file_extension}"
+                        counter += 1
+
+                    filepath = os.path.join(app.config['UPLOAD_FOLDER'], filename)
+                    file.save(filepath)
+                    file_size = os.path.getsize(filepath)
+
+                    # 多文件上传时描述使用文件名（去掉后缀）
+                    new_file = File(
+                        filename=filename,
+                        description=base_filename,  # 文件描述设置为文件名（去掉后缀）
+                        file_size=file_size,
+                        user_id=session['user_id'],
+                        directory_id=directory_id
+                    )
+                    db.session.add(new_file)
+
             else:
                 directory_id = None
-
-            for file in files:
+                file = files[0]
                 filename = secure_filename(file.filename)
                 base_filename, file_extension = os.path.splitext(filename)
                 counter = 1
 
+                # 防止文件名重复
                 while os.path.exists(os.path.join(app.config['UPLOAD_FOLDER'], filename)):
                     filename = f"{base_filename}({counter}){file_extension}"
                     counter += 1
@@ -225,17 +251,25 @@ def upload():
                 filepath = os.path.join(app.config['UPLOAD_FOLDER'], filename)
                 file.save(filepath)
                 file_size = os.path.getsize(filepath)
-                new_file = File(filename=filename, description=description, file_size=file_size,
-                                user_id=session['user_id'], directory_id=directory_id)
+
+                # 单文件上传时描述使用表单中的 description
+                new_file = File(
+                    filename=filename,
+                    description=description,  # 使用表单中的 description 作为文件描述
+                    file_size=file_size,
+                    user_id=session['user_id'],
+                    directory_id=directory_id
+                )
                 db.session.add(new_file)
+
             db.session.commit()
 
             flash(f'用户 {session["username"]} 上传了文件。', 'success')
             log_event(f'用户 {session["username"]} 上传了文件。')
-            return jsonify({'message': '文件上传成功！'})
+            return jsonify({'message': '文件上传成功！'}), 200
         else:
             flash('未选择文件。', 'danger')
-            return jsonify({'message': '未选择文件。'})
+            return jsonify({'message': '未选择文件。'}), 400
     return render_template('upload.html')
 
 
@@ -326,13 +360,18 @@ def file_manager():
 
         if action == 'delete' and item:
             if item_type == 'file':
-                os.remove(os.path.join(app.config['UPLOAD_FOLDER'], item.filename))
+                # 删除文件
+                file_path = os.path.join(app.config['UPLOAD_FOLDER'], item.filename)
+                if os.path.exists(file_path):
+                    os.remove(file_path)
                 db.session.delete(item)
             elif item_type == 'directory':
-                # 获取该目录中的所有文件并删除
+                # 删除目录中的所有文件
                 files_in_directory = File.query.filter_by(directory_id=item.id).all()
                 for file in files_in_directory:
-                    os.remove(os.path.join(app.config['UPLOAD_FOLDER'], file.filename))
+                    file_path = os.path.join(app.config['UPLOAD_FOLDER'], file.filename)
+                    if os.path.exists(file_path):
+                        os.remove(file_path)
                     db.session.delete(file)
 
                 # 删除目录本身
@@ -346,18 +385,21 @@ def file_manager():
             new_description = request.form.get('description')
             item.description = new_description
             db.session.commit()
-            flash(f'{item_type.capitalize()} {item.description} 描述更新成功。', 'success')
-            log_event(f'{item_type.capitalize()} {item.description} 描述更新为 {new_description} ')
+            flash(f'{item_type.capitalize()} 描述更新成功。', 'success')
+            log_event(f'{item_type.capitalize()} 描述更新为 {new_description} ')
+
         elif action == 'update_visibility' and item_type == 'file' and item:
             item.is_public = not item.is_public
             db.session.commit()
             flash(f'文件 {item.filename} 显示状态更改为 {"公开" if item.is_public else "不公开"}', 'success')
             log_event(f'文件 {item.filename} 显示状态更改为 {"公开" if item.is_public else "不公开"} ')
+
         elif action == 'update_directory_visibility' and item_type == 'directory' and item:
             item.is_public = not item.is_public
             db.session.commit()
             flash(f'目录 {item.description} 显示状态更改为 {"公开" if item.is_public else "不公开"}', 'success')
             log_event(f'目录 {item.description} 显示状态更改为 {"公开" if item.is_public else "不公开"} ')
+
         elif action == 'create_share_link' and item_type == 'file' and item:
             share_link = secrets.token_urlsafe(16)
             item.share_link = share_link
@@ -369,6 +411,7 @@ def file_manager():
                 f'文件 {item.filename} 分享链接已创建 http://[{ip_address}]/share/{item.share_link} 密码：{item.share_password} ',
                 'success')
             log_event(f'文件 {item.filename} 分享链接已创建 {item.share_link} 密码：{item.share_password} ')
+
         elif action == 'delete_share_link' and item_type == 'file' and item:
             item.share_link = None
             item.share_password = None
@@ -430,6 +473,20 @@ def directory_manager(directory_id):
                 db.session.commit()
                 flash(f'文件 {file.filename} 分享链接已删除。', 'success')
                 log_event(f'文件 {file.filename} 分享链接已删除 ')
+        elif action == 'update_description' and file_id:
+            file = db.session.get(File, file_id)
+            if file:
+                new_description = request.form.get('description')
+                file.description = new_description
+                db.session.commit()
+                flash(f'文件 {file.filename} 的描述已更新。', 'success')
+                log_event(f'文件 {file.filename} 的描述已更新为 {new_description} ')
+        elif action == 'update_directory_description':
+            new_directory_description = request.form.get('directory_description')
+            directory.description = new_directory_description
+            db.session.commit()
+            flash(f'目录描述已更新为 {new_directory_description}。', 'success')
+            log_event(f'目录描述已更新为 {new_directory_description} ')
 
     files = File.query.filter_by(directory_id=directory_id).all()
     return render_template('directory_manager.html', directory=directory, files=files)
@@ -446,10 +503,23 @@ def upload_file_to_directory(directory_id):
         file = request.files.get('file')
         if file:
             filename = secure_filename(file.filename)
+            base_filename, file_extension = os.path.splitext(filename)
+            counter = 1
+
+            # 检查文件名是否重复，若重复则自动增加序号
+            while os.path.exists(os.path.join(app.config['UPLOAD_FOLDER'], filename)):
+                filename = f"{base_filename}({counter}){file_extension}"
+                counter += 1
+
             file_path = os.path.join(app.config['UPLOAD_FOLDER'], filename)
             file.save(file_path)
+
+            # 获取文件名（不含后缀）
+            base_filename = os.path.splitext(filename)[0]
+
             new_file = File(
                 filename=filename,
+                description=base_filename,  # 设置描述为文件名（不含后缀）
                 file_size=os.path.getsize(file_path),
                 user_id=session['user_id'],
                 directory_id=directory_id
@@ -458,8 +528,10 @@ def upload_file_to_directory(directory_id):
             db.session.commit()
             flash(f'文件 {filename} 上传成功！', 'success')
             log_event(f'文件 {filename} 上传成功！')
-        return redirect(url_for('directory_manager', directory_id=directory_id))
-
+            return jsonify({'message': '文件上传成功！'})  # 返回成功消息
+        else:
+            flash('未选择文件。', 'danger')
+            return jsonify({'message': '上传失败，请重试。'}), redirect(url_for('upload_to_directory'))
     return render_template('upload_to_directory.html', directory=directory)
 
 
