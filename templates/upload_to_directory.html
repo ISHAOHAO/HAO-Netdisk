@@ -6,7 +6,7 @@
     <form action="{{ url_for('upload_file_to_directory', directory_id=directory.id) }}" class="upload-form" enctype="multipart/form-data"
           id="upload-form" method="POST">
         <label for="file">选择文件</label>
-        <input id="file" name="file" onchange="updateFileInfo(this)" required type="file">
+        <input id="file" multiple name="file" onchange="updateFileInfo(this)" required type="file">
         <div id="file-info"></div> <!-- 显示文件信息 -->
         <button class="button" type="submit">上传文件</button>
     </form>
@@ -42,6 +42,11 @@
         const xhr = new XMLHttpRequest();
         xhr.open('POST', form.action, true);
 
+        // 防止用户在文件上传过程中关闭或刷新页面
+        window.onbeforeunload = function() {
+            return "文件上传中，离开页面可能会导致上传失败。";
+        };
+
         xhr.upload.addEventListener('progress', function(event) {
             if (event.lengthComputable) {
                 const percentComplete = (event.loaded / event.total) * 100;
@@ -54,6 +59,7 @@
             const response = JSON.parse(xhr.responseText);
             alert(response.message);  // 显示提示信息
             if (xhr.status === 200) {
+                window.onbeforeunload = null;  // 上传完成，允许页面切换
                 window.location.href = "{{ url_for('files') }}";  // 上传成功后跳转
             } else {
                 alert('上传失败，请重试。');
@@ -176,7 +182,6 @@ h1 {
     border: 1px solid #4cb4d1; /* 添加边框 */
     box-shadow: 0 0 5px rgba(76, 180, 209, 0.5); /* 添加阴影 */
 }
-
-
 </style>
+
 {% endblock %}

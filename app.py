@@ -500,38 +500,39 @@ def upload_file_to_directory(directory_id):
     directory = Directory.query.get_or_404(directory_id)
 
     if request.method == 'POST':
-        file = request.files.get('file')
-        if file:
-            filename = secure_filename(file.filename)
-            base_filename, file_extension = os.path.splitext(filename)
-            counter = 1
+        files = request.files.getlist('file')  # 获取多个文件
+        if files:
+            for file in files:
+                filename = secure_filename(file.filename)
+                base_filename, file_extension = os.path.splitext(filename)
+                counter = 1
 
-            # 检查文件名是否重复，若重复则自动增加序号
-            while os.path.exists(os.path.join(app.config['UPLOAD_FOLDER'], filename)):
-                filename = f"{base_filename}({counter}){file_extension}"
-                counter += 1
+                # 检查文件名是否重复，若重复则自动增加序号
+                while os.path.exists(os.path.join(app.config['UPLOAD_FOLDER'], filename)):
+                    filename = f"{base_filename}({counter}){file_extension}"
+                    counter += 1
 
-            file_path = os.path.join(app.config['UPLOAD_FOLDER'], filename)
-            file.save(file_path)
+                file_path = os.path.join(app.config['UPLOAD_FOLDER'], filename)
+                file.save(file_path)
 
-            # 获取文件名（不含后缀）
-            base_filename = os.path.splitext(filename)[0]
+                # 获取文件名（不含后缀）
+                base_filename = os.path.splitext(filename)[0]
 
-            new_file = File(
-                filename=filename,
-                description=base_filename,  # 设置描述为文件名（不含后缀）
-                file_size=os.path.getsize(file_path),
-                user_id=session['user_id'],
-                directory_id=directory_id
-            )
-            db.session.add(new_file)
+                new_file = File(
+                    filename=filename,
+                    description=base_filename,  # 设置描述为文件名（不含后缀）
+                    file_size=os.path.getsize(file_path),
+                    user_id=session['user_id'],
+                    directory_id=directory_id
+                )
+                db.session.add(new_file)
             db.session.commit()
-            flash(f'文件 {filename} 上传成功！', 'success')
-            log_event(f'文件 {filename} 上传成功！')
+            flash('文件上传成功！', 'success')
+            log_event('文件上传成功！')
             return jsonify({'message': '文件上传成功！'})  # 返回成功消息
         else:
             flash('未选择文件。', 'danger')
-            return jsonify({'message': '上传失败，请重试。'}), redirect(url_for('upload_to_directory'))
+            return jsonify({'message': '上传失败，请重试。'}), 400
     return render_template('upload_to_directory.html', directory=directory)
 
 
