@@ -9,6 +9,7 @@ from tkinter import Tk, Toplevel, Listbox, END, ACTIVE, StringVar, Label, Entry,
 from tkinter import messagebox
 import tkinter as tk
 import requests
+import sys
 from flask import Flask, request, redirect, url_for, render_template, session, flash, send_from_directory, jsonify
 from flask_mail import Mail, Message
 from flask_sqlalchemy import SQLAlchemy
@@ -553,6 +554,46 @@ def file_list_api():
     return jsonify(files_data)
 
 
+@app.route('/directory_list_api', methods=['GET'])
+def directory_list_api():
+    directories = Directory.query.all()
+    directory_data = [{
+        'id': directory.id,
+        'description': directory.description,
+        'files': [{'filename': file.filename} for file in directory.files]
+    } for directory in directories]
+    return jsonify(directory_data)
+
+
+@app.route('/delete_directory', methods=['POST'])
+def delete_directory():
+    data = request.json
+    directory_id = data.get('directory_id')
+    if directory_id:
+        directory = Directory.query.get(directory_id)
+        if directory:
+            # 删除目录中的所有文件
+            for file in directory.files:
+                file_path = os.path.join(app.config['UPLOAD_FOLDER'], file.filename)
+                if os.path.exists(file_path):
+                    try:
+                        os.remove(file_path)
+                        log_event(f'文件 {file.filename} 成功删除。')
+                    except Exception as e:
+                        log_event(f'删除文件 {file.filename} 失败: {e}')
+                else:
+                    log_event(f'文件 {file.filename} 不存在，无法删除。')
+                db.session.delete(file)
+
+            # 删除目录本身
+            db.session.delete(directory)
+            db.session.commit()
+            return jsonify({'status': 'success', 'message': f'目录 {directory.description} 已成功删除!'}), 200
+        else:
+            return jsonify({'status': 'error', 'message': f'目录未找到!'}), 404
+    return jsonify({'status': 'error', 'message': '无效请求!'}), 400
+
+
 @app.route('/delete_file', methods=['POST'])
 def delete_file():
     data = request.json
@@ -896,47 +937,97 @@ class NetdiskLauncher:
             return
 
         try:
-            response = requests.get(f"http://localhost:{self.port}/file_list_api")
-            response.raise_for_status()
+            response_files = requests.get(f"http://localhost:{self.port}/file_list_api")
+            response_directories = requests.get(f"http://localhost:{self.port}/directory_list_api")
+            response_files.raise_for_status()
+            response_directories.raise_for_status()
         except requests.RequestException as e:
-            messagebox.showerror("错误", f"无法获取文件列表！\n{e}")
-            log_event(f"无法获取文件列表！\n{e}")
+            messagebox.showerror("错误", f"无法获取文件或目录列表！\n{e}")
+            log_event(f"无法获取文件或目录列表！\n{e}")
             return
 
-        files = response.json()
+        files = response_files.json()
+        directories = response_directories.json()
         dialog = Toplevel(self.master)
-        dialog.title("删除文件")
-        dialog.geometry("300x300")
+        dialog.title("删除文件或目录")
+        dialog.geometry("400x800")
 
-        Label(dialog, text="选择要删除的文件", font=("Arial", 12)).pack(pady=10)
+        Label(dialog, text="选择要删除的文件或目录", font=("Arial", 16)).pack(pady=10)
 
-        file_listbox = Listbox(dialog, font=("Arial", 12))
+        item_listbox = Listbox(dialog, font=("Arial", 16))
+        item_listbox.insert(END, "文件:")
         for file in files:
-            file_listbox.insert(END, file['filename'])
-        file_listbox.pack(pady=5, fill='both', expand=True)
+            item_listbox.insert(END, file['filename'])
+        item_listbox.insert(END, "目录:")
+        for directory in directories:
+            item_listbox.insert(END, directory['description'])
+        item_listbox.pack(pady=5, fill='both', expand=True)
 
-        def delete_file():
-            selected_file = file_listbox.get(ACTIVE)
-            if selected_file:
-                try:
-                    response = requests.post(f"http://localhost:{self.port}/delete_file",
-                                             json={'filename': selected_file})
-                    response.raise_for_status()
-                    if response.status_code == 200:
-                        messagebox.showinfo("信息", f"文件 '{selected_file}' 已删除！")
-                        log_event(f"管理员已删除文件 '{selected_file}' ！")
-                    else:
-                        messagebox.showerror("错误", f"文件 '{selected_file}' 删除失败！")
-                        log_event(f"管理员删除文件 '{selected_file}' 失败！")
-                except requests.RequestException as e:
-                    messagebox.showerror("错误", f"文件 '{selected_file}' 删除失败！\n{e}")
-                    log_event(f"管理员删除文件 '{selected_file}' 失败！\n{e}")
+        def delete_item():
+            selected_item = item_listbox.get(ACTIVE)
+            if selected_item in [file['filename'] for file in files]:
+                delete_type = 'file'
+                payload = {'filename': selected_item}
+                url = f"http://localhost:{self.port}/delete_file"
+            elif selected_item in [directory['description'] for directory in directories]:
+                delete_type = 'directory'
+                directory_id = next(
+                    directory['id'] for directory in directories if directory['description'] == selected_item)
+                payload = {'directory_id': directory_id}
+                url = f"http://localhost:{self.port}/delete_directory"
+            else:
+                messagebox.showerror("错误", "请选择要删除的文件或目录！")
+                return
+
+            try:
+                response = requests.post(url, json=payload)
+                response.raise_for_status()
+                if response.status_code == 200:
+                    messagebox.showinfo("信息", f"{delete_type.capitalize()} '{selected_item}' 已删除！")
+                    log_event(f"管理员已删除 {delete_type} '{selected_item}'！")
+                else:
+                    messagebox.showerror("错误", f"{delete_type.capitalize()} '{selected_item}' 删除失败！")
+                    log_event(f"管理员删除 {delete_type} '{selected_item}' 失败！")
+            except requests.RequestException as e:
+                messagebox.showerror("错误", f"{delete_type.capitalize()} '{selected_item}' 删除失败！\n{e}")
+                log_event(f"管理员删除 {delete_type} '{selected_item}' 失败！\n{e}")
             dialog.destroy()
 
-        Button(dialog, text="删除文件", command=delete_file, font=("Arial", 12)).pack(pady=10)
+        Button(dialog, text="删除", command=delete_item, font=("Arial", 12)).pack(pady=10)
 
+
+# 检查程序是否是第一次运行
+first_run = True
+try:
+    with open('app.log', 'r') as file:
+        if "程序已运行过" not in file.read():
+            first_run = True
+        else:
+            first_run = False
+except FileNotFoundError:
+    first_run = True
 
 if __name__ == "__main__":
+    # 如果是第一次运行，创建桌面快捷方式
+    if first_run:
+        desktop_path = os.path.join(os.path.expanduser("~"), "Desktop")
+        shortcut_path = os.path.join(desktop_path, "HAO-Netdisk.lnk")  # 快捷方式文件名
+
+        # 创建快捷方式的代码取决于操作系统
+        if sys.platform.startswith('win'):
+            # Windows系统下创建快捷方式的示例
+            import win32com.client
+
+            shell = win32com.client.Dispatch('WScript.Shell')
+            shortcut = shell.CreateShortCut(shortcut_path)
+            shortcut.Targetpath = sys.executable
+            shortcut.WorkingDirectory = os.getcwd()
+            shortcut.WindowStyle = 1
+            shortcut.Save()
+
+        # 记录日志，标记程序已运行过
+        logging.info("程序已运行过")
+
     with app.app_context():
         db.create_all()
 
