@@ -1,22 +1,25 @@
 import logging
 import os
 import secrets
+import sys
 import threading
+import tkinter as tk
 import uuid
 import webbrowser
+import tempfile
 from datetime import datetime, timedelta, timezone
 from tkinter import Tk, Toplevel, Listbox, END, ACTIVE, StringVar, Label, Entry, Button, OptionMenu
 from tkinter import messagebox
-import tkinter as tk
+
 import requests
-import sys
-from flask import Flask, request, redirect, url_for, render_template, session, flash, send_from_directory, jsonify
+from flask import Flask, send_file, abort, request, redirect, url_for, render_template, session, flash, \
+    send_from_directory, jsonify
 from flask_mail import Mail, Message
 from flask_sqlalchemy import SQLAlchemy
 from werkzeug.security import generate_password_hash, check_password_hash
-from werkzeug.utils import secure_filename
 
 app = Flask(__name__)
+tempfile.tempdir = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'uploads')
 app.config['UPLOAD_FOLDER'] = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'uploads')
 app.config['SECRET_KEY'] = 'secrets.token_hex(16)'
 app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///site.db'
@@ -30,8 +33,9 @@ app.config['MAIL_DEFAULT_SENDER'] = 'hao_netdisk@163.com'
 mail = Mail(app)
 db = SQLAlchemy(app)
 
+
 # 版本信息
-current_version = "v1.3.7"  # 当前版本
+current_version = "v1.4.5"  # 当前版本
 
 
 # 获取所有地址，筛选出公网地址
@@ -84,6 +88,7 @@ class File(db.Model):
     share_expiration = db.Column(db.DateTime)
     is_public = db.Column(db.Boolean, default=True)  # 是否公开显示给所有人
     directory_id = db.Column(db.Integer, db.ForeignKey('directory.id'))  # 添加目录字段
+    download_link = db.Column(db.String(36), unique=True, default=lambda: str(uuid.uuid4()))  # 随机生成下载链接
 
 
 class Directory(db.Model):
@@ -206,71 +211,83 @@ def upload():
         description = request.form.get('description')
 
         if files:
-            if len(files) > 1:
-                # 上传多个文件时创建目录，并设置目录的描述为表单中的 description
-                directory = Directory(description=description, user_id=session['user_id'])
-                db.session.add(directory)
-                db.session.commit()
-                directory_id = directory.id
+            try:
+                if len(files) > 1:
+                    directory = Directory(description=description, user_id=session['user_id'])
+                    db.session.add(directory)
+                    db.session.commit()
+                    directory_id = directory.id
 
-                for file in files:
-                    filename = secure_filename(file.filename)
+                    for file in files:
+                        filename = file.filename
+                        base_filename, file_extension = os.path.splitext(filename)
+                        counter = 1
+
+                        while os.path.exists(os.path.join(app.config['UPLOAD_FOLDER'], filename)):
+                            filename = f"{base_filename}({counter}){file_extension}"
+                            counter += 1
+
+                        filepath = os.path.join(app.config['UPLOAD_FOLDER'], filename)
+
+                        # 使用流式上传
+                        with open(filepath, 'wb') as f:
+                            for chunk in file.stream:
+                                f.write(chunk)
+
+                        file_size = os.path.getsize(filepath)
+                        new_file = File(
+                            filename=filename,
+                            description=base_filename,
+                            file_size=file_size,
+                            user_id=session['user_id'],
+                            directory_id=directory_id
+                        )
+                        db.session.add(new_file)
+
+                else:
+                    directory_id = None
+                    file = files[0]
+                    filename = file.filename
                     base_filename, file_extension = os.path.splitext(filename)
                     counter = 1
 
-                    # 防止文件名重复
                     while os.path.exists(os.path.join(app.config['UPLOAD_FOLDER'], filename)):
                         filename = f"{base_filename}({counter}){file_extension}"
                         counter += 1
 
                     filepath = os.path.join(app.config['UPLOAD_FOLDER'], filename)
-                    file.save(filepath)
-                    file_size = os.path.getsize(filepath)
 
-                    # 多文件上传时描述使用文件名（去掉后缀）
+                    # 使用流式上传
+                    with open(filepath, 'wb') as f:
+                        for chunk in file.stream:
+                            f.write(chunk)
+
+                    file_size = os.path.getsize(filepath)
                     new_file = File(
                         filename=filename,
-                        description=base_filename,  # 文件描述设置为文件名（去掉后缀）
+                        description=description,
                         file_size=file_size,
                         user_id=session['user_id'],
                         directory_id=directory_id
                     )
                     db.session.add(new_file)
 
-            else:
-                directory_id = None
-                file = files[0]
-                filename = secure_filename(file.filename)
-                base_filename, file_extension = os.path.splitext(filename)
-                counter = 1
+                db.session.commit()
 
-                # 防止文件名重复
-                while os.path.exists(os.path.join(app.config['UPLOAD_FOLDER'], filename)):
-                    filename = f"{base_filename}({counter}){file_extension}"
-                    counter += 1
+                flash(f'用户 {session["username"]} 上传了文件。', 'success')
+                log_event(f'用户 {session["username"]} 上传了文件。')
+                return jsonify({'message': '文件上传成功！'}), 200
 
-                filepath = os.path.join(app.config['UPLOAD_FOLDER'], filename)
-                file.save(filepath)
-                file_size = os.path.getsize(filepath)
+            except IOError as e:
+                db.session.rollback()
+                flash('文件上传失败，请重试。', 'danger')
+                log_event(f'文件上传失败：{str(e)}')
+                return jsonify({'message': '文件上传失败，请重试。'}), 500
 
-                # 单文件上传时描述使用表单中的 description
-                new_file = File(
-                    filename=filename,
-                    description=description,  # 使用表单中的 description 作为文件描述
-                    file_size=file_size,
-                    user_id=session['user_id'],
-                    directory_id=directory_id
-                )
-                db.session.add(new_file)
-
-            db.session.commit()
-
-            flash(f'用户 {session["username"]} 上传了文件。', 'success')
-            log_event(f'用户 {session["username"]} 上传了文件。')
-            return jsonify({'message': '文件上传成功！'}), 200
         else:
             flash('未选择文件。', 'danger')
             return jsonify({'message': '未选择文件。'}), 400
+
     return render_template('upload.html')
 
 
@@ -302,16 +319,15 @@ def files():
     return render_template('files.html', directories=directories_query, files=files_query, search_query=search_query)
 
 
-@app.route('/download/<filename>', methods=['GET', 'POST'])
-def download(filename):
-    file = File.query.filter_by(filename=filename).first_or_404()
-    if file.share_password:
-        password = request.form.get('password')
-        if password != file.share_password:
-            flash('密码错误。', 'danger')
-            log_event(f'下载文件 {filename} 密码错误。')
-            return render_template('share_file.html', file=file)
-    return send_from_directory(app.config['UPLOAD_FOLDER'], filename, as_attachment=True)
+@app.route('/download/<download_link>')
+def download(download_link):
+    file = File.query.filter_by(download_link=download_link).first_or_404()
+    file_path = os.path.join(app.config['UPLOAD_FOLDER'], file.filename)
+
+    if os.path.exists(file_path):
+        return send_file(file_path, as_attachment=True)
+    else:
+        abort(404)
 
 
 @app.route('/files/<int:file_id>', methods=['GET', 'POST'])
@@ -501,39 +517,50 @@ def upload_file_to_directory(directory_id):
     directory = Directory.query.get_or_404(directory_id)
 
     if request.method == 'POST':
-        files = request.files.getlist('file')  # 获取多个文件
+        files = request.files.getlist('file')
+
         if files:
-            for file in files:
-                filename = secure_filename(file.filename)
-                base_filename, file_extension = os.path.splitext(filename)
-                counter = 1
+            try:
+                for file in files:
+                    filename = file.filename
+                    base_filename, file_extension = os.path.splitext(filename)
+                    counter = 1
 
-                # 检查文件名是否重复，若重复则自动增加序号
-                while os.path.exists(os.path.join(app.config['UPLOAD_FOLDER'], filename)):
-                    filename = f"{base_filename}({counter}){file_extension}"
-                    counter += 1
+                    while os.path.exists(os.path.join(app.config['UPLOAD_FOLDER'], filename)):
+                        filename = f"{base_filename}({counter}){file_extension}"
+                        counter += 1
 
-                file_path = os.path.join(app.config['UPLOAD_FOLDER'], filename)
-                file.save(file_path)
+                    file_path = os.path.join(app.config['UPLOAD_FOLDER'], filename)
 
-                # 获取文件名（不含后缀）
-                base_filename = os.path.splitext(filename)[0]
+                    # 使用流式上传
+                    with open(file_path, 'wb') as f:
+                        for chunk in file.stream:
+                            f.write(chunk)
 
-                new_file = File(
-                    filename=filename,
-                    description=base_filename,  # 设置描述为文件名（不含后缀）
-                    file_size=os.path.getsize(file_path),
-                    user_id=session['user_id'],
-                    directory_id=directory_id
-                )
-                db.session.add(new_file)
-            db.session.commit()
-            flash('文件上传成功！', 'success')
-            log_event('文件上传成功！')
-            return jsonify({'message': '文件上传成功！'})  # 返回成功消息
+                    new_file = File(
+                        filename=filename,
+                        description=base_filename,
+                        file_size=os.path.getsize(file_path),
+                        user_id=session['user_id'],
+                        directory_id=directory_id
+                    )
+                    db.session.add(new_file)
+
+                db.session.commit()
+                flash('文件上传成功！', 'success')
+                log_event('文件上传成功！')
+                return jsonify({'message': '文件上传成功！'}), 200
+
+            except IOError as e:
+                db.session.rollback()
+                flash('文件上传失败，请重试。', 'danger')
+                log_event(f'文件上传失败：{str(e)}')
+                return jsonify({'message': '文件上传失败，请重试。'}), 500
+
         else:
             flash('未选择文件。', 'danger')
-            return jsonify({'message': '上传失败，请重试。'}), 400
+            return jsonify({'message': '未选择文件。'}), 400
+
     return render_template('upload_to_directory.html', directory=directory)
 
 
@@ -1015,7 +1042,7 @@ if __name__ == "__main__":
 
         # 创建快捷方式的代码取决于操作系统
         if sys.platform.startswith('win'):
-            # Windows系统下创建快捷方式的示例
+            # Windows系统下创建快捷方式
             import win32com.client
 
             shell = win32com.client.Dispatch('WScript.Shell')
@@ -1026,7 +1053,7 @@ if __name__ == "__main__":
             shortcut.Save()
 
         # 记录日志，标记程序已运行过
-        logging.info("程序已运行过")
+        logging.info("程序为第一次运行，创建桌面快捷方式！")
 
     with app.app_context():
         db.create_all()

@@ -11,7 +11,11 @@
             <a href="" id="url-display" target="_blank"></a>
         </div>
         <form action="{{ url_for('share_file', share_link=file.share_link) }}" class="share-file-form" method="POST">
-            <input name="password" placeholder="输入密码" type="password">
+            <label class="div_input">
+                <input name="password" type="password">
+                <div class="underline"></div>
+                <label>请输入密码，若没有密码，不需要输入</label>
+            </label>
             <button class="button" type="submit">下载文件</button>
             <a class="button" href="{{ url_for('file_manager') }}">返回文件管理</a>
         </form>

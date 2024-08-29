@@ -5,11 +5,16 @@
     outline: none;
     box-sizing: border-box;
     font-family: 'Poppins',sans-serif;
+    cursor: url(../images/arrow.png), auto;
 }
 body {
     background-color: #f8f9fa;
     color: #212529;
     font-family: Arial, sans-serif;
+}
+
+a {
+    cursor: url(../images/arrow1.png), auto;
 }
 
 /* 导航条 */
@@ -69,6 +74,7 @@ h1, h2 {
 
 .button:hover, .button1:hover {
     background-color: #0056b3;
+    cursor: url(../images/arrow1.png), auto;
 }
 
 /* 表单控件样式 */

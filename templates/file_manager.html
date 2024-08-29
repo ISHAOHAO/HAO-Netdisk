@@ -49,15 +49,10 @@
                     </label>
                     <button class="button" name="update_description" type="submit">更新描述</button>
                 </form>
-                <form action="{{ url_for('file_manager') }}" class="d-inline-block" method="post">
-                    <input name="item_id" type="hidden" value="{{ directory.id }}">
-                    <input name="item_type" type="hidden" value="directory">
-                    <input name="action" type="hidden" value="delete">
-                    <button class="button" onclick="return confirmDeleteDirectory('{{ directory.description }}')"
-                            type="submit">
-                        删除目录
-                    </button>
-                </form>
+                <button class="button"
+                        onclick="showDeleteConfirm('directory', '{{ directory.id }}', '{{ directory.description }}')">
+                    删除目录
+                </button>
             </td>
         </tr>
         {% endfor %}
@@ -116,14 +111,9 @@
                     </label>
                     <button class="button" name="update_description" type="submit">更新描述</button>
                 </form>
-                <form action="{{ url_for('file_manager') }}" class="d-inline-block" method="post">
-                    <input name="item_id" type="hidden" value="{{ file.id }}">
-                    <input name="item_type" type="hidden" value="file">
-                    <input name="action" type="hidden" value="delete">
-                    <button class="button" onclick="return confirmDelete('{{ file.filename }}')" type="submit">
-                        删除文件
-                    </button>
-                </form>
+                <button class="button" onclick="showDeleteConfirm('file', '{{ file.id }}', '{{ file.filename }}')">
+                    删除文件
+                </button>
             </td>
         </tr>
         {% endfor %}
@@ -144,13 +134,70 @@
     <a class="button" href="{{ url_for('files') }}">返回文件列表</a>
 
 </section>
+
+<!-- 删除确认弹窗 -->
+<div class="custom-alert" id="deleteConfirm" style="display: none;">
+    <p id="deleteMessage"></p>
+    <form action="{{ url_for('file_manager') }}" id="deleteForm" method="POST">
+        <input id="deleteItemId" name="item_id" type="hidden">
+        <input id="deleteItemType" name="item_type" type="hidden">
+        <input name="action" type="hidden" value="delete">
+        <button class="button" onmouseout="this.style.backgroundColor='red';" onmouseover="this.style.backgroundColor='#B22222';"
+                style="background-color: red;" type="submit">删除
+        </button>
+        <button class="button" onclick="hideDeleteConfirm()" type="button">关闭</button>
+    </form>
+</div>
+
 <script>
-    function confirmDelete(filename) {
-        return confirm('确定要删除文件 ' + filename + ' 吗？');
+    function showDeleteConfirm(itemType, itemId, itemName) {
+        var message = itemType === 'file' ? `确定要删除文件 ${itemName} 吗？` : `确定要删除目录 ${itemName} 吗？此操作将删除该目录中的所有文件。`;
+        document.getElementById('deleteMessage').innerText = message;
+        document.getElementById('deleteItemId').value = itemId;
+        document.getElementById('deleteItemType').value = itemType;
+        document.getElementById('deleteConfirm').style.display = 'block';
+        return false; // 防止表单提交
     }
 
-    function confirmDeleteDirectory(directoryName) {
-        return confirm('确定要删除目录 ' + directoryName + ' 吗？此操作将删除该目录中的所有文件。');
+    function hideDeleteConfirm() {
+        document.getElementById('deleteConfirm').style.display = 'none';
     }
 </script>
+<style>.custom-alert {
+    position: fixed;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    background-color: #333;
+    color: #fff;
+    padding: 20px;
+    border-radius: 10px;
+    box-shadow: 0 0 15px rgba(0, 0, 0, 0.3);
+    z-index: 1000;
+    text-align: center;
+}
+
+.custom-alert p {
+    margin-bottom: 20px;
+}
+
+.custom-alert button {
+    background: #007bff;
+    color: white;
+    padding: 10px 20px;
+    border: none;
+    border-radius: 5px;
+    cursor: pointer;
+    transition: background-color 0.3s ease;
+    margin: 0 10px; /* 为按钮添加左右间距 */
+}
+
+.custom-alert button:hover {
+    background: #0056b3;
+}
+
+.custom-alert form {
+    display: inline;
+}
+</style>
 {% endblock %}

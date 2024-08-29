@@ -20,26 +20,3 @@ document.querySelector('input[name="search"]').addEventListener('input', functio
         document.querySelector('form').submit();
     }
 });
-
-// 处理表单提交事件，显示弹窗
-document.addEventListener('DOMContentLoaded', () => {
-    const flashMessage = document.querySelector('.flash-message');
-    if (flashMessage) {
-        setTimeout(() => {
-            flashMessage.remove();
-        }, 3000);
-    }
-});
-
-// 处理表单提交后弹窗
-document.querySelectorAll('form').forEach(form => {
-    form.addEventListener('submit', (event) => {
-        if (form.checkValidity()) {
-            // 可以添加表单验证成功后的处理逻辑
-        } else {
-            event.preventDefault();
-            alert('请检查表单中的错误。');
-        }
-    });
-});
-

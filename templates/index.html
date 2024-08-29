@@ -6,7 +6,7 @@
     <h1 style="color:#333;">欢迎 <span style="color:#007bff;">{{ session['username'] }}</span></h1>
     {% else %}
     <h1 style="color:#333;">欢迎 <span style="color: #007bff;">游客</span></h1>
-    <a class="button" href="{{ url_for('register') }}">注册</a>
+    <a class="button" href="{{ url_for('register') }}" type="button">注册</a>
     {% endif %}
     <p style="margin-top:30px;font-size:16px;"><b style="font-size:22px;">HAO-Netdisk</b>&nbsp;&nbsp;一个安全、简洁的文件管理系统
     </p>

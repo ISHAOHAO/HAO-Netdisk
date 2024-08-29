@@ -21,7 +21,7 @@
         </thead>
         <tbody>
         {% for directory in directories.items %}
-        <tr>
+        <tr style="border-bottom: 1px;border-bottom: 2px dotted;border-bottom: medium dashed blue;">
             <td>{{ directory.description }}</td>
             <td>目录</td>
             <td>{{ directory.uploader.username }}</td>
@@ -41,7 +41,7 @@
             <td>{{ file.file_size|filesizeformat }}</td>
             <td>{{ file.upload_time.strftime('%Y-%m-%d %H:%M:%S') }}</td>
             <td>
-                <a class="button" href="{{ url_for('download', filename=file.filename) }}"
+                <a class="button" href="{{ url_for('download', download_link=file.download_link) }}"
                    style="margin-bottom: 5px;margin-top: 5px;">下载</a>
                 <a class="button" href="{{ url_for('file_detail', file_id=file.id) }}">预览</a>
             </td>

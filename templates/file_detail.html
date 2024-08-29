@@ -4,15 +4,50 @@
 <section>
     <h1>文件预览</h1>
     <div class="file-preview">
-        {% if file.filename.endswith(('png', 'jpg', 'jpeg', 'gif')) %}
-        <img alt="图片预览" class="preview-img" src="{{ url_for('download', filename=file.filename) }}">
-        {% elif file.filename.endswith(('mp4', 'webm')) %}
-        <video class="preview-video" controls>
-            <source src="{{ url_for('download', filename=file.filename) }}" type="video/mp4">
+        {% if file.filename.endswith(('png', 'jpg', 'jpeg', 'gif', 'bmp', 'svg')) %}
+        <img alt="图片预览" class="preview-img" src="{{ url_for('download', download_link=file.download_link) }}">
+
+        {% elif file.filename.endswith(('mp4', 'webm', 'mkv', 'mov', 'avi', 'flv', 'wmv')) %}
+        <video class="preview-video" controls playsinline>
+            <source src="{{ url_for('download', download_link=file.download_link) }}" type="video/mp4">
+            <source src="{{ url_for('download', download_link=file.download_link) }}" type="video/webm">
+            <source src="{{ url_for('download', download_link=file.download_link) }}" type="video/x-matroska">
+            <source src="{{ url_for('download', download_link=file.download_link) }}" type="video/quicktime">
+            <source src="{{ url_for('download', download_link=file.download_link) }}" type="video/x-msvideo">
+            <source src="{{ url_for('download', download_link=file.download_link) }}" type="video/x-flv">
+            <source src="{{ url_for('download', download_link=file.download_link) }}" type="video/x-ms-wmv">
             您的浏览器不支持视频标签。
         </video>
-        {% elif file.filename.endswith('pdf') %}
-        <embed class="preview-pdf" src="{{ url_for('download', filename=file.filename) }}" type="application/pdf">
+
+        {% elif file.filename.endswith(('mp3', 'wav', 'ogg', 'flac', 'aac', 'm4a')) %}
+        <audio class="preview-audio" controls>
+            <source src="{{ url_for('download', download_link=file.download_link) }}" type="audio/mpeg">
+            <source src="{{ url_for('download', download_link=file.download_link) }}" type="audio/wav">
+            <source src="{{ url_for('download', download_link=file.download_link) }}" type="audio/ogg">
+            <source src="{{ url_for('download', download_link=file.download_link) }}" type="audio/flac">
+            <source src="{{ url_for('download', download_link=file.download_link) }}" type="audio/aac">
+            <source src="{{ url_for('download', download_link=file.download_link) }}" type="audio/x-m4a">
+            您的浏览器不支持音频标签。
+        </audio>
+
+        {% elif file.filename.endswith(('pdf')) %}
+        <embed class="preview-pdf" src="{{ url_for('download', download_link=file.download_link) }}"
+               type="application/pdf">
+
+        {% elif file.filename.endswith(('doc', 'docx')) %}
+        <iframe class="preview-doc"
+                frameborder="0"
+                src="https://docs.google.com/gview?url={{ url_for('download', download_link=file.download_link) }}&embedded=true" style="width:100%; height:500px;"></iframe>
+
+        {% elif file.filename.endswith(('xls', 'xlsx')) %}
+        <iframe class="preview-xls"
+                frameborder="0"
+                src="https://view.officeapps.live.com/op/embed.aspx?src={{ url_for('download', download_link=file.download_link) }}" style="width:100%; height:500px;"></iframe>
+
+        {% elif file.filename.endswith(('txt', 'csv', 'json', 'xml', 'md')) %}
+        <iframe class="preview-txt" frameborder="0"
+                src="{{ url_for('download', download_link=file.download_link) }}" style="width:100%; height:500px;"></iframe>
+
         {% else %}
         <p>无法预览此文件类型。</p>
         {% endif %}
