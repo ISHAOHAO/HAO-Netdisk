@@ -1,0 +1,165 @@
+{% extends "base.html" %}
+
+{% block content %}
+<h1>修改个人资料</h1>
+<form class="upload-form" enctype="multipart/form-data" id="profile-form" method="post">
+    <label for="bio">个人简介:</label>
+    <textarea id="bio" name="bio" placeholder="请输入个人简介..." rows="4">{{ user.bio }}</textarea>
+
+    <label for="avatar">头像上传:</label>
+    <input accept="image/*" id="avatar-input" name="avatar" type="file">
+    <div id="avatar-preview" style="display: none;">
+        <img alt="头像预览" id="cropper-image" src="">
+    </div>
+
+    <button id="crop-save-button" style="display: none;" type="button">保存个人资料</button>
+</form>
+
+<!-- 引入Cropper.js -->
+<link href="{{ url_for('static', filename='css/cropper.css') }}" rel="stylesheet">
+<script src="{{ url_for('static', filename='js/cropperjs.js') }}"></script>
+
+<style>
+    body {
+        background-color: #f0f0f0;
+        color: #333;
+        font-family: 'Arial', sans-serif;
+    }
+    h1 {
+        text-align: center;
+        color: #0066cc;
+    }
+    form {
+        max-width: 500px;
+        margin: auto;
+        background: white;
+        padding: 20px;
+        border-radius: 10px;
+        box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+    }
+    label {
+        display: block;
+        margin-bottom: 10px;
+    }
+    textarea {
+        width: 100%;
+        padding: 10px;
+        border: 1px solid #ccc;
+        border-radius: 5px;
+        margin-bottom: 20px;
+    }
+    input[type="file"] {
+        margin-bottom: 20px;
+    }
+    #avatar-preview {
+        margin-bottom: 20px;
+    }
+    #cropper-image {
+        max-width: 100%;
+        border-radius: 5px;
+    }
+    button {
+        display: inline-block;
+        padding: 10px 15px;
+        background-color: #0066cc;
+        color: white;
+        border: none;
+        border-radius: 5px;
+        cursor: pointer;
+        transition: background-color 0.3s;
+        width: 100%;
+        margin-top: 10px;
+    }
+    button:hover {
+        background-color: #005bb5;
+    }
+    /* 表单样式 */
+    .upload-form {
+        display: flex;
+        flex-direction: column;
+    }
+
+    .upload-form label {
+        margin-bottom: 5px;
+        font-weight: bold;
+    }
+
+    .upload-form input[type="file"],
+    .upload-form textarea,
+    .upload-form button {
+        padding: 10px;
+        margin-bottom: 15px;
+        border: none;
+        border-radius: 4px;
+        background: #e9ecef;
+        transition: all 0.3s ease;
+    }
+
+    .upload-form input[type="file"]:focus,
+    .upload-form textarea:focus {
+        outline: none;
+        box-shadow: 0 0 0 2px #007bff;
+    }
+
+    .upload-form textarea {
+        min-height: 100px;
+        resize: vertical;
+    }
+
+    .upload-form button {
+        background: #007bff;
+        color: white;
+        cursor: pointer;
+        transition: background-color 0.3s ease;
+    }
+
+    .upload-form button:hover {
+        background: #0056b3;
+    }
+</style>
+
+<script>
+    let cropper;
+    const avatarInput = document.getElementById('avatar-input');
+    const avatarPreview = document.getElementById('avatar-preview');
+    const cropSaveButton = document.getElementById('crop-save-button');
+    const cropperImage = document.getElementById('cropper-image');
+
+    avatarInput.addEventListener('change', (event) => {
+        const files = event.target.files;
+        if (files.length > 0) {
+            const reader = new FileReader();
+            reader.onload = (e) => {
+                cropperImage.src = e.target.result;
+                avatarPreview.style.display = 'block';
+                cropSaveButton.style.display = 'inline-block';
+
+                if (cropper) {
+                    cropper.destroy();
+                }
+                cropper = new Cropper(cropperImage, {
+                    aspectRatio: 1,
+                    viewMode: 1,
+                });
+            };
+            reader.readAsDataURL(files[0]);
+        }
+    });
+
+    cropSaveButton.addEventListener('click', () => {
+        const canvas = cropper.getCroppedCanvas({
+            width: 200,
+            height: 200,
+        });
+        canvas.toBlob((blob) => {
+            const file = new File([blob], 'avatar.png', { type: 'image/png' });
+            const dataTransfer = new DataTransfer();
+            dataTransfer.items.add(file);
+            avatarInput.files = dataTransfer.files;
+
+            // 提交表单
+            document.getElementById('profile-form').submit();
+        });
+    });
+</script>
+{% endblock %}

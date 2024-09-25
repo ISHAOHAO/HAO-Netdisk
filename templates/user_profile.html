@@ -1,0 +1,46 @@
+{% extends "base.html" %}
+
+{% block content %}
+<h1>{{ user.username }} 的个人主页</h1>
+<img alt="头像" src="{{ url_for('static', filename='images/avatar/' + user.username + '.png') }}"
+     style="width: 100px; height: 100px; border-radius: 50%;">
+<p>个人简介: {{ user.bio if user.bio else '对方很懒，什么都没有留下' }}</p>
+
+{% if user.id == session.get('user_id') %}
+<a class="button" href="{{ url_for('edit_profile') }}">修改资料</a>
+{% endif %}
+
+<h2>发布的文件和目录</h2>
+
+<!-- 显示用户的目录及目录内文件 -->
+{% if directories %}
+<h3>目录</h3>
+<ul>
+    {% for directory in directories %}
+    <li>
+        <strong>目录: {{ directory.description }}</strong>
+        <ul>
+            <!-- 列出目录下的文件 -->
+            {% for file in directory.files %}
+            <li>文件: {{ file.description }} - <a href="{{ url_for('file_detail', file_id=file.id) }}">查看</a></li>
+            {% endfor %}
+        </ul>
+    </li>
+    {% endfor %}
+</ul>
+{% else %}
+<p>没有目录</p>
+{% endif %}
+
+<!-- 显示不在任何目录中的文件 -->
+{% if files %}
+<h3>文件</h3>
+<ul>
+    {% for file in files %}
+    <li>文件: {{ file.description }} - <a href="{{ url_for('file_detail', file_id=file.id) }}">查看</a></li>
+    {% endfor %}
+</ul>
+{% else %}
+<p>没有文件</p>
+{% endif %}
+{% endblock %}

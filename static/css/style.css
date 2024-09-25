@@ -60,6 +60,7 @@ h1, h2 {
     display: inline-block;
     margin-bottom: 5px;
     margin-top: 5px;
+    cursor: url(../images/arrow1.png), auto;
 }
 .button1 {
     display:flex;

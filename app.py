@@ -6,7 +6,9 @@ import threading
 import tkinter as tk
 import uuid
 import webbrowser
+import shutil
 import tempfile
+import socket
 from datetime import datetime, timedelta, timezone
 from tkinter import Tk, Toplevel, Listbox, END, ACTIVE, StringVar, Label, Entry, Button, OptionMenu
 from tkinter import messagebox
@@ -33,9 +35,8 @@ app.config['MAIL_DEFAULT_SENDER'] = 'hao_netdisk@163.com'
 mail = Mail(app)
 db = SQLAlchemy(app)
 
-
 # 版本信息
-current_version = "v1.4.5"  # 当前版本
+current_version = "v1.6.7"  # 当前版本
 
 
 # 获取所有地址，筛选出公网地址
@@ -49,7 +50,7 @@ def get_public_ip():
         pass
 
     try:
-        ipv4_response = requests.get('https://api.ipify.org?format=json')
+        ipv4_response = requests.get('https://ipinfo.io/ip?format=json')
         ipv4_address = ipv4_response.json()['ip']
     except Exception:
         pass
@@ -74,6 +75,7 @@ class User(db.Model):
     reset_token = db.Column(db.String(100))  # 添加重置密码的 token
     token_expiration = db.Column(db.DateTime)  # 添加 token 过期时间
     files = db.relationship('File', backref='uploader', lazy=True)
+    bio = db.Column(db.String(200))  # 个人简介字段
 
 
 class File(db.Model):
@@ -112,6 +114,42 @@ def index():
     return render_template('index.html', ip_address=ip_address, username=username)
 
 
+@app.route('/user/<username>')
+def user_profile(username):
+    user = User.query.filter_by(username=username).first_or_404()
+
+    # 获取用户的公开文件和目录
+    user_directories = Directory.query.filter_by(user_id=user.id, is_public=True).all()  # 只显示公开的目录
+    user_files = File.query.filter_by(user_id=user.id, is_public=True, directory_id=None).all()  # 只显示未在目录中的文件
+
+    return render_template('user_profile.html', user=user, directories=user_directories, files=user_files)
+
+
+@app.route('/edit_profile', methods=['GET', 'POST'])
+def edit_profile():
+    if 'user_id' not in session:
+        return redirect(url_for('login'))
+
+    user = db.session.get(User, session['user_id'])
+
+    if request.method == 'POST':
+        user.bio = request.form.get('bio')
+        # 头像上传处理
+        avatar_file = request.files.get('avatar')
+        if avatar_file and avatar_file.filename.lower().endswith(('.png', '.jpg', '.gif')):
+            old_avatar_path = f'static/images/avatar/{user.username}.png'
+            if os.path.exists(old_avatar_path):
+                os.remove(old_avatar_path)  # 删除旧头像
+            avatar_path = f'static/images/avatar/{user.username}.png'
+            avatar_file.save(avatar_path)
+
+        db.session.commit()
+        flash('个人资料更新成功！', 'success')
+        return redirect(url_for('user_profile', username=user.username))
+
+    return render_template('edit_profile.html', user=user)
+
+
 @app.route('/login', methods=['GET', 'POST'])
 def login():
     if request.method == 'POST':
@@ -147,6 +185,12 @@ def register():
             new_user = User(username=username, email=email, password=hashed_password)
             db.session.add(new_user)
             db.session.commit()
+
+            # 复制默认头像
+            default_avatar_path = 'static/images/avatar/default_avatar.png'
+            user_avatar_path = f'static/images/avatar/{username}.png'
+            shutil.copy(default_avatar_path, user_avatar_path)
+
             flash(f'注册成功！您的用户名为 {username} ,请登录。', 'success')
             log_event(f'新用户注册: {username}。')
             return redirect(url_for('login'))
@@ -303,20 +347,64 @@ def directory_detail(directory_id):
 def files():
     search_query = request.args.get('search', '')
     page = request.args.get('page', 1, type=int)
+    per_page = 10  # 每页最多10个条目，包括目录和文件
 
-    # 查询所有目录，如果是其他用户则只显示公开目录
-    directories_query = Directory.query.filter(
+    # 查询所有目录，非公开目录仅允许上传者查看
+    directories = Directory.query.filter(
         Directory.description.like(f'%{search_query}%')
     ).filter(
-        (Directory.user_id == session.get('user_id')) | (Directory.files.any(File.is_public == True))
-    ).paginate(page=page, per_page=10)
+        (Directory.is_public == True) | (Directory.user_id == session.get('user_id'))
+    ).all()
 
     # 显示不属于任何目录的公开文件或当前用户的文件
-    files_query = File.query.filter(File.directory_id.is_(None)).filter(File.filename.like(f'%{search_query}%')).filter(
+    files = File.query.filter(File.directory_id.is_(None)).filter(File.filename.like(f'%{search_query}%')).filter(
         (File.is_public == True) | (File.user_id == session.get('user_id'))
-    ).paginate(page=page, per_page=10)
+    ).all()
 
-    return render_template('files.html', directories=directories_query, files=files_query, search_query=search_query)
+    # 合并目录和文件列表
+    combined_items = directories + files
+    combined_items.sort(key=lambda x: x.upload_time, reverse=True)  # 按上传时间排序
+
+    # 自定义分页
+    total_items = len(combined_items)
+    start = (page - 1) * per_page
+    end = start + per_page
+    paginated_items = combined_items[start:end]
+
+    # 分成目录和文件
+    paginated_directories = [item for item in paginated_items if isinstance(item, Directory)]
+    paginated_files = [item for item in paginated_items if isinstance(item, File)]
+
+    # 创建自定义分页对象
+    class Pagination:
+        def __init__(self, total_items, current_page, per_page):
+            self.total_items = total_items
+            self.current_page = current_page
+            self.per_page = per_page
+
+        @property
+        def has_prev(self):
+            return self.current_page > 1
+
+        @property
+        def has_next(self):
+            return self.current_page * self.per_page < self.total_items
+
+        @property
+        def prev_num(self):
+            return self.current_page - 1
+
+        @property
+        def next_num(self):
+            return self.current_page + 1
+
+        def iter_pages(self):
+            return range(1, (self.total_items // self.per_page) + 2)
+
+    pagination = Pagination(total_items, page, per_page)
+
+    return render_template('files.html', directories=paginated_directories, files=paginated_files,
+                           pagination=pagination, search_query=search_query)
 
 
 @app.route('/download/<download_link>')
@@ -333,18 +421,6 @@ def download(download_link):
 @app.route('/files/<int:file_id>', methods=['GET', 'POST'])
 def file_detail(file_id):
     file = File.query.get_or_404(file_id)
-    if request.method == 'POST':
-        if 'download' in request.form:
-            return send_from_directory(app.config['UPLOAD_FOLDER'], file.filename, as_attachment=True)
-        elif 'create_share_link' in request.form:
-            share_link = secrets.token_urlsafe(16)
-            file.share_link = share_link
-            file.share_password = request.form.get('password')
-            file.share_expiration = datetime.utcnow() + timedelta(days=1)  # 过期时间设置为1天
-            db.session.commit()
-            flash('分享链接已创建。', 'success')
-            log_event(f'分享链接 {file.filename} 已创建。')
-            return redirect(url_for('file_detail', file_id=file.id))
     return render_template('file_detail.html', file=file, share_link=file.share_link)
 
 
@@ -611,7 +687,6 @@ def delete_directory():
                 else:
                     log_event(f'文件 {file.filename} 不存在，无法删除。')
                 db.session.delete(file)
-
             # 删除目录本身
             db.session.delete(directory)
             db.session.commit()
@@ -646,10 +721,8 @@ def start_flask_app(host, port, stop_event):
 
     flask_thread = threading.Thread(target=run, daemon=True)
     flask_thread.start()
-
     while not stop_event.is_set():
         stop_event.wait(1)
-
     # 停止 Flask 服务
     os._exit(0)
 
@@ -661,21 +734,16 @@ def open_browser(url):
 class VersionChecker:
     def __init__(self, root):
         self.root = root
-
         # 配置信息
         self.ACCESS_TOKEN = "4af13024a4e20b212c998c308df5ca33"
         self.REPO_PATH = "is-haohao/HAO-Netdisk"
         self.API_URL = f"https://gitee.com/api/v5/repos/{self.REPO_PATH}/releases/latest"
-
         # 创建检测版本按钮
         self.check_button = tk.Button(self.root, text="检查最新版本", font=("Arial", 14), command=self.check_version,
                                       bg="#ffffff", fg="#000000", width=12)
         self.check_button.pack(pady=20)
-
         counter = 0
-
         Menubar = tk.Menu(root)
-
         # 创建文件菜单
         FileMenu = tk.Menu(Menubar, tearoff=0)
         Menubar.add_cascade(label='帮助', menu=FileMenu)
@@ -685,16 +753,13 @@ class VersionChecker:
         FileMenu.add_separator()
         FileMenu.add_command(label='查看日志', command=self.show_log_info)
         FileMenu.add_command(label='上传文件目录', command=self.show_folder_info)
-
         # 创建联系我们菜单
         Contact = tk.Menu(Menubar, tearoff=0)
         Menubar.add_cascade(label='联系我们', menu=Contact)
         Contact.add_command(label='发送邮件', command=self.send_email)
         Contact.add_command(label='我的网站', command=self.open_website)
-
         # 添加退出菜单项
         Menubar.add_cascade(label='退出', command=root.quit)
-
         # 配置菜单栏
         root.config(menu=Menubar)
 
@@ -746,7 +811,6 @@ class VersionChecker:
 
     # 显示协议信息
     def show_agreement_info(self):
-        import socket
         # 尝试创建一个IPv6的socket连接
         supports_ipv6 = False
         try:
@@ -771,9 +835,9 @@ class VersionChecker:
     def show_port_info(self):
         messagebox.showinfo("关于端口设置", "端口可以进行随意设置,但需要确保端口未被占用。")
 
-    # 显示关于信息
+    # 显示关于我们1信息
     def show_about_info(self):
-        messagebox.showinfo("关于", f"HAO-Netdisk网盘系统。\n版本: {current_version}\nHAOHAO版权所有 © 2024")
+        messagebox.showinfo("关于我们", f"HAO-Netdisk网盘系统。\n版本: {current_version}\nHAOHAO版权所有 © 2024")
 
     # 发送邮件
     def send_email(self):
@@ -816,7 +880,6 @@ class NetdiskLauncher:
         self.process = None
         self.host = "::"
         self.port = 5000
-
         self.create_widgets()
         self.update_status()
         self.master.protocol("WM_DELETE_WINDOW", self.on_closing)
@@ -829,53 +892,64 @@ class NetdiskLauncher:
             self.master.destroy()
 
     def create_widgets(self):
+        # 检测是否支持 IPv6
+        ipv6_supported = self.check_ipv6_support()
+        # 选择运行模式 Label
         Label(self.master, text="选择运行模式", font=("Arial", 14), bg="#2e3a4f", fg="#ffffff").pack(pady=10)
-
-        self.mode_var = StringVar(value="IPv6")
+        # Protocol Menu
+        self.mode_var = StringVar(value="IPv6" if ipv6_supported else "IPv4")
         self.protocol_menu = OptionMenu(self.master, self.mode_var, "IPv6", "IPv4", command=self.update_protocol)
         self.protocol_menu.config(bg="#3b4d6b", fg="#ffffff", font=("Arial", 12))
         self.protocol_menu.pack(pady=5)
-
         self.protocol_menu["menu"].config(bg="#2e3a4f", fg="#ffffff", font=("Arial", 12))
         self.protocol_menu["highlightthickness"] = 0
         self.protocol_menu["bd"] = 0
-
+        # 显示 IPv6 检测状态
+        ipv6_status_text = "IPv6 已支持" if ipv6_supported else "IPv6 不支持"
+        ipv6_status_color = "#4caf50" if ipv6_supported else "#f44336"
+        self.ipv6_status_label = Label(self.master, text=ipv6_status_text, font=("Arial", 12), bg="#2e3a4f",
+                                       fg=ipv6_status_color)
+        self.ipv6_status_label.pack(pady=5)
+        # 端口号
         Label(self.master, text="端口号(默认5000)", font=("Arial", 12), bg="#2e3a4f", fg="#ffffff").pack(pady=5)
         self.port_entry = Entry(self.master, font=("Arial", 12))
         self.port_entry.pack(pady=5)
         self.port_entry.insert(0, str(self.port))
-
+        # 启动、停止、重启按钮
         self.start_button = Button(self.master, text="启动服务", font=("Arial", 14), command=self.start_service,
                                    bg="#4caf50", fg="#ffffff", width=15)
         self.start_button.pack(pady=10)
-
         self.stop_button = Button(self.master, text="停止服务", font=("Arial", 14), command=self.stop_service,
                                   bg="#f44336", fg="#ffffff", width=15)
         self.stop_button.pack(pady=10)
-
         self.restart_button = Button(self.master, text="重启服务", font=("Arial", 14), command=self.restart_service,
                                      bg="#ff9800", fg="#ffffff", width=15)
         self.restart_button.pack(pady=10)
-
+        # 复制公网和本地链接按钮
         self.copy_public_link_button = Button(self.master, text="复制公网访问链接", font=("Arial", 14),
-                                              command=self.copy_public_link,
-                                              bg="#2196f3", fg="#ffffff", width=20)
+                                              command=self.copy_public_link, bg="#2196f3", fg="#ffffff", width=20)
         self.copy_public_link_button.pack(pady=10)
-
         self.copy_local_link_button = Button(self.master, text="复制本地访问链接", font=("Arial", 14),
-                                             command=self.copy_local_link,
-                                             bg="#2196f3", fg="#ffffff", width=20)
+                                             command=self.copy_local_link, bg="#2196f3", fg="#ffffff", width=20)
         self.copy_local_link_button.pack(pady=10)
-
+        # 删除文件按钮
         self.delete_file_button = Button(self.master, text="删除文件", font=("Arial", 14),
                                          command=self.delete_file_dialog, bg="#9c27b0", fg="#ffffff", width=15)
         self.delete_file_button.pack(pady=10)
-
+        # 状态标签
         self.status_label = Label(self.master, text="", font=("Arial", 12), bg="#2e3a4f", fg="#ffffff")
         self.status_label.pack(pady=10)
-
-        #  VersionChecker 组件
+        # VersionChecker 组件
         self.version_checker = VersionChecker(self.master)
+
+    # 检测是否支持 IPv6 的函数
+    def check_ipv6_support(self):
+        try:
+            # 尝试创建一个支持 IPv6 的 socket
+            socket.socket(socket.AF_INET6, socket.SOCK_STREAM)
+            return True
+        except OSError:
+            return False
 
     def update_protocol(self, value):
         if value == "IPv6":
@@ -905,12 +979,10 @@ class NetdiskLauncher:
         else:
             messagebox.showwarning("警告", "未知的协议类型！")
             return
-
             # 复制链接到剪贴板
         self.master.clipboard_clear()
         self.master.clipboard_append(link)
         self.master.update()
-
         # 显示信息消息
         messagebox.showinfo("信息", "公网访问链接已复制到剪贴板！")
 
@@ -918,7 +990,6 @@ class NetdiskLauncher:
         if not self.process or not self.process.is_alive():
             messagebox.showwarning("警告", "服务未在运行中！")
             return
-
         link = f"http://localhost:{self.port}"
         self.master.clipboard_clear()
         self.master.clipboard_append(link)
@@ -935,11 +1006,24 @@ class NetdiskLauncher:
         if not self.process or not self.process.is_alive():
             self.host = self.host
             self.port = int(self.port_entry.get() or self.port)
+            # 检查端口是否被占用
+            if self.is_port_in_use(self.host, self.port):
+                messagebox.showwarning("警告", f"端口 {self.port} 已被占用，请选择其他端口！")
+                return
             self.stop_event.clear()
             self.process = threading.Thread(target=self.run_flask_app, daemon=True)
             self.process.start()
             self.update_status()
             open_browser(f'http://localhost:{self.port}')
+
+    def is_port_in_use(self, host, port):
+        """检测指定端口是否被占用"""
+        with socket.socket(socket.AF_INET6 if host == "::" else socket.AF_INET, socket.SOCK_STREAM) as sock:
+            try:
+                sock.bind((host, port))
+                return False  # 端口未被占用
+            except OSError:
+                return True  # 端口被占用
 
     def run_flask_app(self):
         start_flask_app(self.host, self.port, self.stop_event)
@@ -962,7 +1046,6 @@ class NetdiskLauncher:
         if not self.process or not self.process.is_alive():
             messagebox.showwarning("警告", "服务未在运行中！")
             return
-
         try:
             response_files = requests.get(f"http://localhost:{self.port}/file_list_api")
             response_directories = requests.get(f"http://localhost:{self.port}/directory_list_api")
@@ -972,15 +1055,12 @@ class NetdiskLauncher:
             messagebox.showerror("错误", f"无法获取文件或目录列表！\n{e}")
             log_event(f"无法获取文件或目录列表！\n{e}")
             return
-
         files = response_files.json()
         directories = response_directories.json()
         dialog = Toplevel(self.master)
         dialog.title("删除文件或目录")
         dialog.geometry("400x800")
-
         Label(dialog, text="选择要删除的文件或目录", font=("Arial", 16)).pack(pady=10)
-
         item_listbox = Listbox(dialog, font=("Arial", 16))
         item_listbox.insert(END, "文件:")
         for file in files:
@@ -1005,7 +1085,6 @@ class NetdiskLauncher:
             else:
                 messagebox.showerror("错误", "请选择要删除的文件或目录！")
                 return
-
             try:
                 response = requests.post(url, json=payload)
                 response.raise_for_status()

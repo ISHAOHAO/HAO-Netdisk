@@ -123,33 +123,25 @@
                 {% if 'user_id' in session %}
                 <li class="nav-item"><a class="nav-link" href="{{ url_for('upload') }}">上传文件</a></li>
                 <li class="nav-item"><a class="nav-link" href="{{ url_for('file_manager') }}">文件管理</a></li>
+                <li class="nav-item">
+                    <a class="nav-link" href="{{ url_for('user_profile', username=session['username']) }}">
+                        <img alt="头像"
+                             src="{{ url_for('static', filename='images/avatar/' + session['username'] + '.png') }}" style="width: 30px; height: 30px; border-radius: 50%;">
+                    </a>
+                </li>
                 <li class="nav-item"><a class="nav-link" href="{{ url_for('logout') }}">退出登录</a></li>
                 {% else %}
                 <li class="nav-item"><a class="nav-link" href="{{ url_for('login') }}">登录</a></li>
                 <li class="nav-item"><a class="nav-link" href="{{ url_for('register') }}">注册</a></li>
                 {% endif %}
             </ul>
-            <div class="navbar-nav">
-                {% if 'user' in session %}
-                <li class="nav-item">
-                    {% set avatar_filename = session['user']['avatar'] %}
-                    {% set username = session['user']['username'] %}
-                    {% set avatar_path = url_for('avatar', filename=avatar_filename) if avatar_filename else
-                    url_for('avatars', filename=username + '.png') %}
-                    <a class="nav-link d-flex align-items-center" href="{{ url_for('profile') }}">
-                        <img alt="User Avatar" class="rounded-circle" src="{{ avatar_path }}"
-                             style="width: 30px; height: 30px; margin-right: 10px;">
-                        {{ session['user']['username'] }}
-                    </a>
-                </li>
-                {% endif %}
-            </div>
         </div>
     </div>
 </nav>
 <!-- 广播条 -->
 <!--<view class="water_tips">
-    <view class="water_text">不注册即可下载文件，注册后即可上传文件&#38;&nbsp;所有内容仅供测试和学习交流。&emsp;&emsp;&emsp;&emsp;&emsp;&emsp;&emsp;&emsp;&emsp;&emsp;&emsp;&emsp;&emsp;&emsp;本站仅供删档版本测试使用，所有权归属 HAOHAO © 2024 所有！</view>
+    <view class="water_text">不注册即可下载文件，注册后即可上传文件&#38;&nbsp;所有内容仅供测试和学习交流。&emsp;&emsp;&emsp;&emsp;&emsp;&emsp;&emsp;&emsp;本站仅供删档版本测试使用，版权所有 © 2024 HAOHAO 保留所有权利。
+免责声明：本网盘服务由个人提供，旨在支持开源项目的删档测试。用户上传的内容版权归原作者所有，本服务不承担任何版权责任。我们不对用户上传的内容或第三方链接的内容负责。本服务“现状”提供，不提供任何明示或暗示的保证。使用本服务即表示您同意我们的隐私政策和服务条款。</view>
 </view>-->
 
 

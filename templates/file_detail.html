@@ -16,7 +16,7 @@
             <source src="{{ url_for('download', download_link=file.download_link) }}" type="video/x-msvideo">
             <source src="{{ url_for('download', download_link=file.download_link) }}" type="video/x-flv">
             <source src="{{ url_for('download', download_link=file.download_link) }}" type="video/x-ms-wmv">
-            您的浏览器不支持视频标签。
+            您的浏览器不支持视频标签，请尝试更换浏览器。
         </video>
 
         {% elif file.filename.endswith(('mp3', 'wav', 'ogg', 'flac', 'aac', 'm4a')) %}
@@ -27,32 +27,203 @@
             <source src="{{ url_for('download', download_link=file.download_link) }}" type="audio/flac">
             <source src="{{ url_for('download', download_link=file.download_link) }}" type="audio/aac">
             <source src="{{ url_for('download', download_link=file.download_link) }}" type="audio/x-m4a">
-            您的浏览器不支持音频标签。
+            您的浏览器不支持音频标签，请尝试更换浏览器。
         </audio>
 
         {% elif file.filename.endswith(('pdf')) %}
-        <embed class="preview-pdf" src="{{ url_for('download', download_link=file.download_link) }}"
-               type="application/pdf">
+        <div class="preview-pdf" id="pdf-preview"></div>
+        <button class="toggle-button" id="toggle-pdf">展开</button>
 
         {% elif file.filename.endswith(('doc', 'docx')) %}
-        <iframe class="preview-doc"
-                frameborder="0"
-                src="https://docs.google.com/gview?url={{ url_for('download', download_link=file.download_link) }}&embedded=true" style="width:100%; height:500px;"></iframe>
+        <div class="preview-doc" id="doc-preview"></div>
+        <button class="toggle-button" id="toggle-doc">展开</button>
 
         {% elif file.filename.endswith(('xls', 'xlsx')) %}
-        <iframe class="preview-xls"
-                frameborder="0"
-                src="https://view.officeapps.live.com/op/embed.aspx?src={{ url_for('download', download_link=file.download_link) }}" style="width:100%; height:500px;"></iframe>
+        <div class="preview-xls" id="xls-preview"></div>
+        <button class="toggle-button" id="toggle-xls">展开</button>
 
         {% elif file.filename.endswith(('txt', 'csv', 'json', 'xml', 'md')) %}
-        <iframe class="preview-txt" frameborder="0"
-                src="{{ url_for('download', download_link=file.download_link) }}" style="width:100%; height:500px;"></iframe>
+        <pre class="preview-txt" id="txt-preview"></pre>
+        <button class="toggle-button" id="toggle-txt">展开</button>
 
         {% else %}
         <p>无法预览此文件类型。</p>
         {% endif %}
         <br>
-        <a class="button" href="{{ url_for('file_manager') }}">返回文件管理</a>
+        <a class="button" href="{{ url_for('files') }}" type="button">返回文件列表</a>
     </div>
 </section>
+
+<!-- 引入相关JS库 -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.10.377/pdf.min.js"></script>
+<script src="{{ url_for('static', filename='js/mammoth.js') }}"></script>
+<script src="{{ url_for('static', filename='js/xlsx.js') }}"></script>
+
+<!-- 处理文件预览 -->
+<script>
+    {% if file.filename.endswith(('pdf')) %}
+        var url = "{{ url_for('download', download_link=file.download_link) }}";
+        var loadingTask = pdfjsLib.getDocument(url);
+        loadingTask.promise.then(function(pdf) {
+            var pdfContainer = document.getElementById('pdf-preview');
+            pdfContainer.innerHTML = '';  // 清空容器
+
+            var scale = window.innerWidth < 768 ? 1.0 : 1.5;  // 调整缩放比例
+            var dpi = window.devicePixelRatio || 1;
+
+            for (var pageNum = 1; pageNum <= pdf.numPages; pageNum++) {
+                pdf.getPage(pageNum).then(function(page) {
+                    var viewport = page.getViewport({ scale: scale });
+                    var canvas = document.createElement('canvas');
+                    var context = canvas.getContext('2d');
+
+                    canvas.height = viewport.height * dpi;
+                    canvas.width = viewport.width * dpi;
+                    canvas.style.width = '100%';
+                    canvas.style.height = 'auto';
+
+                    context.scale(dpi, dpi);
+
+                    page.render({ canvasContext: context, viewport: viewport }).promise.then(function() {
+                        pdfContainer.appendChild(canvas);
+                        pdfContainer.appendChild(document.createElement('hr'));
+                    });
+                });
+            }
+        });
+
+        // 展开/折叠按钮逻辑
+        document.getElementById('toggle-pdf').addEventListener('click', function() {
+            var pdfContainer = document.getElementById('pdf-preview');
+            if (pdfContainer.style.maxHeight && pdfContainer.style.maxHeight !== 'none') {
+                pdfContainer.style.maxHeight = 'none';
+                this.textContent = '折叠';
+            } else {
+                pdfContainer.style.maxHeight = '60vh';  // 视口高度的60%
+                pdfContainer.style.overflow = 'auto';  // 显示滚动条
+                this.textContent = '展开';
+            }
+        });
+
+    {% elif file.filename.endswith(('doc', 'docx')) %}
+        fetch("{{ url_for('download', download_link=file.download_link) }}")
+            .then(response => response.arrayBuffer())
+            .then(arrayBuffer => mammoth.convertToHtml({ arrayBuffer: arrayBuffer }))
+            .then(result => {
+                document.getElementById('doc-preview').innerHTML = result.value;
+                document.querySelectorAll('#doc-preview table').forEach(table => {
+                    table.style.borderCollapse = 'collapse';
+                    table.style.width = '100%';
+                    table.style.border = '1px solid #ddd';
+                });
+                document.querySelectorAll('#doc-preview th, #doc-preview td').forEach(cell => {
+                    cell.style.border = '1px solid #ddd';
+                    cell.style.padding = '8px';
+                    cell.style.textAlign = 'left';
+                });
+            })
+            .catch(console.error);
+
+        document.getElementById('toggle-doc').addEventListener('click', function() {
+            var docContainer = document.getElementById('doc-preview');
+            if (docContainer.style.maxHeight && docContainer.style.maxHeight !== 'none') {
+                docContainer.style.maxHeight = 'none';
+                this.textContent = '折叠';
+            } else {
+                docContainer.style.maxHeight = '60vh';  // 视口高度的60%
+                docContainer.style.overflow = 'auto';  // 显示滚动条
+                this.textContent = '展开';
+            }
+        });
+
+    {% elif file.filename.endswith(('xls', 'xlsx')) %}
+        fetch("{{ url_for('download', download_link=file.download_link) }}")
+            .then(response => response.arrayBuffer())
+            .then(arrayBuffer => {
+                var workbook = XLSX.read(arrayBuffer, { type: "array" });
+                var sheet_name_list = workbook.SheetNames;
+                var htmlstr = XLSX.utils.sheet_to_html(workbook.Sheets[sheet_name_list[0]], {
+                    header: 1,
+                    cellStyles: true
+                });
+                document.getElementById('xls-preview').innerHTML = htmlstr;
+                document.querySelectorAll('#xls-preview table').forEach(table => {
+                    table.style.borderCollapse = 'collapse';
+                    table.style.width = '100%';
+                    table.style.border = '1px solid #ddd';
+                });
+                document.querySelectorAll('#xls-preview th, #xls-preview td').forEach(cell => {
+                    cell.style.border = '1px solid #ddd';
+                    cell.style.padding = '8px';
+                    cell.style.textAlign = 'left';
+                });
+            })
+            .catch(console.error);
+
+        document.getElementById('toggle-xls').addEventListener('click', function() {
+            var xlsContainer = document.getElementById('xls-preview');
+            if (xlsContainer.style.maxHeight && xlsContainer.style.maxHeight !== 'none') {
+                xlsContainer.style.maxHeight = 'none';
+                this.textContent = '折叠';
+            } else {
+                xlsContainer.style.maxHeight = '60vh';  // 视口高度的60%
+                xlsContainer.style.overflow = 'auto';  // 显示滚动条
+                this.textContent = '展开';
+            }
+        });
+
+    {% elif file.filename.endswith(('txt', 'csv', 'json', 'xml', 'md')) %}
+        fetch("{{ url_for('download', download_link=file.download_link) }}")
+            .then(response => response.text())
+            .then(text => document.getElementById('txt-preview').textContent = text)
+            .catch(console.error);
+
+        document.getElementById('toggle-txt').addEventListener('click', function() {
+            var txtContainer = document.getElementById('txt-preview');
+            if (txtContainer.style.maxHeight && txtContainer.style.maxHeight !== 'none') {
+                txtContainer.style.maxHeight = 'none';
+                this.textContent = '折叠';
+            } else {
+                txtContainer.style.maxHeight = '60vh';  // 视口高度的60%
+                txtContainer.style.overflow = 'auto';  // 显示滚动条
+                this.textContent = '展开';
+            }
+        });
+
+    {% endif %}
+</script>
+
+<!-- 响应式设计 -->
+<style>
+    .preview-pdf, .preview-doc, .preview-xls, .preview-txt {
+        max-height: 60vh;  /* 视口高度的60% */
+        overflow: auto;  /* 显示滚动条 */
+    }
+
+    .preview-img, .preview-video{
+        max-width: auto;
+        height: 100%;
+    }
+
+    .toggle-button {
+        display: block;
+        margin-top: 10px;
+        padding: 10px;
+        border: none;
+        background-color: #007bff;
+        color: white;
+        cursor: pointer;
+    }
+
+    .toggle-button:hover {
+        background-color: #0056b3;
+    }
+
+    @media (max-width: 768px) {
+        iframe, embed {
+            width: 100%;
+            height: auto;
+        }
+    }
+</style>
 {% endblock %}

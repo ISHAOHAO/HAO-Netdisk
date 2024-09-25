@@ -20,11 +20,15 @@
         </tr>
         </thead>
         <tbody>
-        {% for directory in directories.items %}
+        {% for directory in directories %}
         <tr style="border-bottom: 1px;border-bottom: 2px dotted;border-bottom: medium dashed blue;">
             <td>{{ directory.description }}</td>
             <td>目录</td>
-            <td>{{ directory.uploader.username }}</td>
+            <td><a href="{{ url_for('user_profile', username=directory.uploader.username) }}"
+                   style="text-decoration: none;">{{
+                directory.uploader.username }}<img
+                        alt="头像"
+                        src="{{ url_for('static', filename='images/avatar/' + directory.uploader.username + '.png') }}" style="width: 40px; height: 40px; border-radius: 50%;"></a></td>
             <td>-</td>
             <td>{{ directory.upload_time }}</td>
             <td>
@@ -33,11 +37,14 @@
             <td>-</td>
         </tr>
         {% endfor %}
-        {% for file in files.items %}
+        {% for file in files %}
         <tr style="border-bottom: 1px;border-bottom: 2px dotted;border-bottom: medium dashed blue;">
             <td>{{ file.description }}</td>
             <td>文件</td>
-            <td>{{ file.uploader.username }}</td>
+            <td><a href="{{ url_for('user_profile', username=file.uploader.username) }}" style="text-decoration: none;">{{
+                file.uploader.username }}<img
+                        alt="头像"
+                        src="{{ url_for('static', filename='images/avatar/' + file.uploader.username + '.png') }}" style="width: 40px; height: 40px; border-radius: 50%;"></a></td>
             <td>{{ file.file_size|filesizeformat }}</td>
             <td>{{ file.upload_time.strftime('%Y-%m-%d %H:%M:%S') }}</td>
             <td>
@@ -72,17 +79,18 @@
         </tbody>
     </table>
     <div class="pagination">
-        {% if files.has_prev %}
-        <a class="page-link" href="{{ url_for('files', page=files.prev_num, search=search_query) }}">上一页</a>
+        {% if pagination.has_prev %}
+        <a class="page-link" href="{{ url_for('files', page=pagination.prev_num, search=search_query) }}">上一页</a>
         {% endif %}
-        {% for page_num in files.iter_pages() %}
+        {% for page_num in pagination.iter_pages() %}
         {% if page_num %}
         <a class="page-link" href="{{ url_for('files', page=page_num, search=search_query) }}">{{ page_num }}</a>
         {% endif %}
         {% endfor %}
-        {% if files.has_next %}
-        <a class="page-link" href="{{ url_for('files', page=files.next_num, search=search_query) }}">下一页</a>
+        {% if pagination.has_next %}
+        <a class="page-link" href="{{ url_for('files', page=pagination.next_num, search=search_query) }}">下一页</a>
         {% endif %}
     </div>
 </section>
+
 {% endblock %}
