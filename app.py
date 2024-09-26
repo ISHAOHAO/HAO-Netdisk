@@ -1,14 +1,14 @@
 import logging
 import os
 import secrets
+import shutil
+import socket
 import sys
+import tempfile
 import threading
 import tkinter as tk
 import uuid
 import webbrowser
-import shutil
-import tempfile
-import socket
 from datetime import datetime, timedelta, timezone
 from tkinter import Tk, Toplevel, Listbox, END, ACTIVE, StringVar, Label, Entry, Button, OptionMenu
 from tkinter import messagebox
@@ -18,6 +18,8 @@ from flask import Flask, send_file, abort, request, redirect, url_for, render_te
     send_from_directory, jsonify
 from flask_mail import Mail, Message
 from flask_sqlalchemy import SQLAlchemy
+from sqlalchemy import inspect
+from sqlalchemy import text
 from werkzeug.security import generate_password_hash, check_password_hash
 
 app = Flask(__name__)
@@ -716,7 +718,6 @@ def start_flask_app(host, port, stop_event):
         try:
             app.run(host=host, port=port, use_reloader=False)
         except Exception as e:
-            print(f"Flask 服务运行出错: {e}")
             log_event(f"Flask 服务运行出错: {e}")
 
     flask_thread = threading.Thread(target=run, daemon=True)
@@ -1113,6 +1114,34 @@ try:
 except FileNotFoundError:
     first_run = True
 
+
+def check_and_update_database():
+    with app.app_context():
+        inspector = inspect(db.engine)
+        tables_in_db = inspector.get_table_names()
+
+        # 检查每个定义的表是否在数据库中存在，如果不存在则创建
+        for table_class in [User, File, Directory]:  # 将你的表模型类放在这里
+            table_name = table_class.__tablename__
+            if table_name not in tables_in_db:
+                db.create_all()
+                log_event(f"数据库表 {table_name} 不存在，已创建。")
+            else:
+                log_event(f"数据库表 {table_name} 已存在。")
+
+        # 对比并更新表中列（补全缺失列）
+        for table_class in [User, File, Directory]:
+            table_name = table_class.__tablename__
+            columns_in_db = [col['name'] for col in inspector.get_columns(table_name)]
+            for column in table_class.__table__.columns:
+                if column.name not in columns_in_db:
+                    # 使用 SQLAlchemy 提供的 text() 方法来执行原生 SQL 语句
+                    alter_command = text(f'ALTER TABLE {table_name} ADD COLUMN {column.name} {column.type}')
+                    db.session.execute(alter_command)
+                    db.session.commit()
+                    log_event(f"数据库表 {table_name} 缺少列 {column.name}，已补全。")
+
+
 if __name__ == "__main__":
     # 如果是第一次运行，创建桌面快捷方式
     if first_run:
@@ -1134,15 +1163,19 @@ if __name__ == "__main__":
         # 记录日志，标记程序已运行过
         logging.info("程序为第一次运行，创建桌面快捷方式！")
 
-    with app.app_context():
-        db.create_all()
+    # 检查数据库模型是否一致并补全
+    check_and_update_database()
 
+    # 关闭pyinstaller的启动动画
+    ##
     try:
         import pyi_splash
 
+        pyi_splash.update_text('UI Loaded ...')
         pyi_splash.close()
-    except ImportError:
+    except:
         pass
+    ##
 
     root = Tk()
     app_gui = NetdiskLauncher(root)
