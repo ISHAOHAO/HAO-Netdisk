@@ -25,6 +25,7 @@ from werkzeug.security import generate_password_hash, check_password_hash
 app = Flask(__name__)
 tempfile.tempdir = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'uploads')
 app.config['UPLOAD_FOLDER'] = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'uploads')
+app.config['AVATAR_FOLDER'] = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'static', 'images', 'avatar')
 app.config['SECRET_KEY'] = 'secrets.token_hex(16)'
 app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///site.db'
 app.config['MAIL_SERVER'] = 'smtp.163.com'
@@ -108,6 +109,9 @@ class Directory(db.Model):
 if not os.path.exists(app.config['UPLOAD_FOLDER']):
     os.makedirs(app.config['UPLOAD_FOLDER'])
 
+if not os.path.exists(app.config['AVATAR_FOLDER']):
+    os.makedirs(app.config['AVATAR_FOLDER'])
+
 
 @app.route('/')
 def index():
@@ -139,10 +143,13 @@ def edit_profile():
         # 头像上传处理
         avatar_file = request.files.get('avatar')
         if avatar_file and avatar_file.filename.lower().endswith(('.png', '.jpg', '.gif')):
-            old_avatar_path = f'static/images/avatar/{user.username}.png'
+            # 构建旧头像的绝对路径
+            old_avatar_path = os.path.join(app.config['AVATAR_FOLDER'], f'{user.username}.png')
             if os.path.exists(old_avatar_path):
                 os.remove(old_avatar_path)  # 删除旧头像
-            avatar_path = f'static/images/avatar/{user.username}.png'
+
+            # 构建新的头像保存路径
+            avatar_path = os.path.join(app.config['AVATAR_FOLDER'], f'{user.username}.png')
             avatar_file.save(avatar_path)
 
         db.session.commit()
@@ -188,9 +195,9 @@ def register():
             db.session.add(new_user)
             db.session.commit()
 
-            # 复制默认头像
-            default_avatar_path = 'static/images/avatar/default_avatar.png'
-            user_avatar_path = f'static/images/avatar/{username}.png'
+            # 复制默认头像到用户的头像路径
+            default_avatar_path = os.path.join(app.config['AVATAR_FOLDER'], 'default_avatar.png')
+            user_avatar_path = os.path.join(app.config['AVATAR_FOLDER'], f'{username}.png')
             shutil.copy(default_avatar_path, user_avatar_path)
 
             flash(f'注册成功！您的用户名为 {username} ,请登录。', 'success')
