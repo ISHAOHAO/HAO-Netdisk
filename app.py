@@ -53,8 +53,8 @@ def get_public_ip():
         pass
 
     try:
-        ipv4_response = requests.get('https://ipinfo.io/ip?format=json')
-        ipv4_address = ipv4_response.json()['ip']
+        ipv4_response = requests.get('https://httpbin.org/ip?format=json')
+        ipv4_address = ipv4_response.json()['origin'].split(',')[0]  # 获取IPv4地址
     except Exception:
         pass
 
