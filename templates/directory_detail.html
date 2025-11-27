@@ -3,9 +3,34 @@
 {% block content %}
 <section>
     <h1>目录: {{ directory.description }}</h1>
+
+    <!-- 展开/折叠按钮 -->
+    <button id="toggle-gallery" class="button" onclick="toggleGallery()">展开照片预览</button>
+
+    <!-- 照片预览区域 -->
+    <div id="photo-gallery" class="photo-gallery" style="display: none;">
+        {% for file in files.items %}
+            {% if file.filename.lower().endswith(('.png', '.jpg', '.jpeg', '.gif', '.bmp', '.webp', '.svg', '.ico', '.PNG', '.JPG', '.JPEG', '.GIF', '.BMP', '.WEBP')) %}
+                <a href="{{ url_for('download', download_link=file.download_link) }}" data-lightbox="photo-gallery" data-title="{{ file.description }}">
+                    <img src="{{ url_for('download', download_link=file.download_link) }}" alt="{{ file.description }}" style="width: 150px; height: 160px; margin: 5px;">
+                    <p class="file-name" style="height:10px; text-align: center;">{{ file.description }}</p>
+                </a>
+            {% endif %}
+        {% endfor %}
+    </div>
+
+    <div class="batch-actions">
+        <button class="button" onclick="downloadSelected()">下载选中项</button>
+        <label class="select-all">
+            <input type="checkbox" id="selectAll" onchange="toggleSelectAll(this)" aria-label="全选">
+            全选
+        </label>
+    </div>
+    <!-- 文件列表表格 -->
     <table class="table table-striped">
         <thead>
         <tr>
+            <th>选择</th>
             <th>文件名</th>
             <th>描述</th>
             <th>大小</th>
@@ -17,6 +42,7 @@
         <tbody>
         {% for file in files.items %}
         <tr style="border-bottom: 1px;border-bottom: 2px dotted;border-bottom: medium dashed blue;">
+            <td><input type="checkbox" class="select-item" data-id="{{ file.download_link }}"></td>
             <td>{{ file.filename }}</td>
             <td>{{ file.description }}</td>
             <td>{{ file.file_size|filesizeformat }}</td>
@@ -68,4 +94,129 @@
     </div>
     <a class="button" href="{{ url_for('files') }}">返回文件列表</a>
 </section>
+
+<!-- 引入 Lightbox CSS 和 JS -->
+<link href="../static/css/lightbox2.css" rel="stylesheet">
+<script src="../static/js/lightbox2.js"></script>
+
+<style>
+    .photo-gallery {
+        display: flex;
+        flex-wrap: wrap;
+        margin-bottom: 20px;
+    }
+
+    .photo-gallery img {
+        border-radius: 5px;
+        transition: transform 0.2s ease-in-out;
+    }
+
+    .photo-gallery img:hover {
+        transform: scale(1.1);
+    }
+
+    .file-name {
+        margin-top: 5px;
+        font-size: 14px;
+        color: #333;
+        word-break: break-all; /* 防止文件名过长溢出 */
+        max-width: 150px; /* 限制文件名宽度 */
+    }
+</style>
+
+<script>
+    // 展开/折叠照片预览区域
+    function toggleGallery() {
+        const gallery = document.getElementById('photo-gallery');
+        const toggleButton = document.getElementById('toggle-gallery');
+
+        if (gallery.style.display === 'none') {
+            gallery.style.display = 'flex'; // 显示照片预览区域
+            toggleButton.textContent = '折叠照片预览'; // 切换按钮文字
+        } else {
+            gallery.style.display = 'none'; // 隐藏照片预览区域
+            toggleButton.textContent = '展开照片预览'; // 切换按钮文字
+        }
+    }
+
+    // 多选下载
+    function downloadSelected() {
+        const items = document.querySelectorAll('.select-item:checked');
+        if(items.length === 0) {
+            alert('请先选择要下载的文件');
+            return;
+        }
+
+        // 创建隐藏的iframe容器
+        const iframeContainer = document.createElement('div');
+        iframeContainer.style.display = 'none';
+        document.body.appendChild(iframeContainer);
+
+        // 逐个下载文件
+        items.forEach((item, index) => {
+            if(item.dataset.type === 'file') {
+                setTimeout(() => {
+                    const iframe = document.createElement('iframe');
+                    iframe.src = `/download/${item.dataset.id}`;
+                    iframeContainer.appendChild(iframe);
+                }, index * 1000); // 每个文件间隔1秒下载
+            }
+        });
+
+        // 提示用户
+        alert(`已开始下载${items.length}个文件，请查看浏览器下载列表`);
+
+        // 5秒后移除iframe容器
+        setTimeout(() => {
+            document.body.removeChild(iframeContainer);
+        }, 5000);
+    }
+
+    // 全选/反选功能
+    function toggleSelectAll(source) {
+        const checkboxes = document.querySelectorAll('.select-item');
+        checkboxes.forEach(checkbox => {
+            checkbox.checked = source.checked;
+        });
+
+        // 更新全选按钮状态
+        updateSelectAllState();
+    }
+
+    // 更新全选按钮状态
+    function updateSelectAllState() {
+        const checkboxes = document.querySelectorAll('.select-item');
+        const selectAllCheckbox = document.getElementById('selectAll');
+
+        if (checkboxes.length === 0) {
+            selectAllCheckbox.checked = false;
+            selectAllCheckbox.disabled = true;
+            return;
+        }
+
+        selectAllCheckbox.disabled = false;
+
+        // 检查是否所有复选框都被选中
+        const allChecked = Array.from(checkboxes).every(checkbox => checkbox.checked);
+        selectAllCheckbox.checked = allChecked;
+
+        // 处理部分选中状态
+        const someChecked = Array.from(checkboxes).some(checkbox => checkbox.checked);
+        selectAllCheckbox.indeterminate = someChecked && !allChecked;
+    }
+
+    // 为每个复选框添加事件监听器
+    function setupCheckboxListeners() {
+        const checkboxes = document.querySelectorAll('.select-item');
+        checkboxes.forEach(checkbox => {
+            checkbox.addEventListener('change', updateSelectAllState);
+        });
+    }
+
+    // 初始化
+    document.addEventListener('DOMContentLoaded', function() {
+        setupCheckboxListeners();
+        updateSelectAllState();
+    });
+</script>
 {% endblock %}

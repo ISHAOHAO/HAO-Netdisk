@@ -3,7 +3,11 @@
 {% block content %}
 <section>
     <h1>目录管理 - {{ directory.description }}</h1>
-
+    <div class="batch-actions">
+        <button class="button" onclick="deleteSelected()">删除选中项</button>
+        <input type="checkbox" id="selectAll" onchange="toggleSelectAll(this)"> 全选
+        </label>
+    </div>
     <!-- 更新目录描述的表单 -->
     <form action="{{ url_for('directory_manager', directory_id=directory.id) }}" method="post">
         <input name="action" type="hidden" value="update_directory_description">
@@ -18,6 +22,7 @@
     <table class="table table-striped">
         <thead>
         <tr>
+            <th>选择</th>
             <th>文件名</th>
             <th>描述</th>
             <th>大小</th>
@@ -29,6 +34,9 @@
         <tbody>
         {% for file in files %}
         <tr>
+            <td>
+                <input class="select-item" data-id="{{ file.id }}" data-type="file" type="checkbox">
+            </td>
             <td>{{ file.filename }}</td>
             <td>{{ file.description }}</td>
             <td>{{ file.file_size|filesizeformat }}</td>
@@ -120,6 +128,82 @@
     function hideDeleteConfirm() {
         document.getElementById('deleteConfirm').style.display = 'none';
     }
+
+    // 多选删除
+    function deleteSelected() {
+        const items = document.querySelectorAll('.select-item:checked');
+        const ids = {
+            files: []
+        };
+
+        items.forEach(item => {
+            if (item.dataset.type === 'file') {
+                ids.files.push(item.dataset.id);
+            }
+        });
+
+        if (ids.files.length === 0) {
+            alert('请至少选择一个文件进行删除');
+            return;
+        }
+
+        if (confirm(`确定要删除选中的 ${ids.files.length} 个文件吗？`)) {
+            fetch('/batch_delete', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(ids)
+            }).then(response => {
+                if (response.ok) location.reload();
+            });
+        }
+    }
+
+    // 全选/反选功能
+    function toggleSelectAll(source) {
+        const checkboxes = document.querySelectorAll('.select-item');
+        checkboxes.forEach(checkbox => {
+            checkbox.checked = source.checked;
+        });
+
+        // 更新全选按钮状态
+        updateSelectAllState();
+    }
+
+    // 更新全选按钮状态
+    function updateSelectAllState() {
+        const checkboxes = document.querySelectorAll('.select-item');
+        const selectAllCheckbox = document.getElementById('selectAll');
+
+        if (checkboxes.length === 0) {
+            selectAllCheckbox.checked = false;
+            selectAllCheckbox.disabled = true;
+            return;
+        }
+
+        selectAllCheckbox.disabled = false;
+
+        // 检查是否所有复选框都被选中
+        const allChecked = Array.from(checkboxes).every(checkbox => checkbox.checked);
+        selectAllCheckbox.checked = allChecked;
+
+        // 处理部分选中状态
+        const someChecked = Array.from(checkboxes).some(checkbox => checkbox.checked);
+        selectAllCheckbox.indeterminate = someChecked && !allChecked;
+    }
+
+    // 为每个复选框添加事件监听器
+    function setupCheckboxListeners() {
+        const checkboxes = document.querySelectorAll('.select-item');
+        checkboxes.forEach(checkbox => {
+            checkbox.addEventListener('change', updateSelectAllState);
+        });
+    }
+
+    // 初始化
+    document.addEventListener('DOMContentLoaded', function() {
+        setupCheckboxListeners();
+        updateSelectAllState();
+    });
 </script>
 <style>.custom-alert {
     position: fixed;

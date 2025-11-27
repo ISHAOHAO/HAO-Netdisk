@@ -4,12 +4,21 @@
 <section>
     <h1>文件列表</h1>
     <form action="{{ url_for('files') }}" class="search-form" method="get">
-        <input class="form-control" name="search" placeholder="搜索文件..." type="text" value="{{ search_query }}">
+        <input class="form-control" name="search" placeholder="搜索文件..." type="text" value="{{ search_query }}" oninput="showSuggestions(this.value)">
         <button class="button" type="submit">搜索</button>
+        <div id="search-suggestions" style="display: none;"></div>
     </form>
+    <div class="batch-actions">
+        <button class="button" onclick="downloadSelected()">下载选中项</button>
+        <label class="select-all">
+            <input type="checkbox" id="selectAll" onchange="toggleSelectAll(this)" aria-label="全选">
+            全选
+        </label>
+    </div>
     <table class="table table-striped">
         <thead>
         <tr>
+            <th>选择</th>
             <th>描述</th>
             <th>类型</th>
             <th>上传者</th>
@@ -22,6 +31,7 @@
         <tbody>
         {% for directory in directories %}
         <tr style="border-bottom: 1px;border-bottom: 2px dotted;border-bottom: medium dashed blue;">
+            <td><input type="checkbox" class="select-item" data-type="directory" data-id="{{ directory.id }}"></td>
             <td>{{ directory.description }}</td>
             <td>目录</td>
             <td><a href="{{ url_for('user_profile', username=directory.uploader.username) }}"
@@ -39,6 +49,7 @@
         {% endfor %}
         {% for file in files %}
         <tr style="border-bottom: 1px;border-bottom: 2px dotted;border-bottom: medium dashed blue;">
+            <td><input type="checkbox" class="select-item" data-type="file" data-id="{{ file.download_link }}"></td>
             <td>{{ file.description }}</td>
             <td>文件</td>
             <td><a href="{{ url_for('user_profile', username=file.uploader.username) }}" style="text-decoration: none;">{{
@@ -80,17 +91,112 @@
     </table>
     <div class="pagination">
         {% if pagination.has_prev %}
-        <a class="page-link" href="{{ url_for('files', page=pagination.prev_num, search=search_query) }}">上一页</a>
+            <a class="page-link" href="{{ url_for('files', page=pagination.prev_num, search=search_query) }}">上一页</a>
         {% endif %}
+
         {% for page_num in pagination.iter_pages() %}
-        {% if page_num %}
-        <a class="page-link" href="{{ url_for('files', page=page_num, search=search_query) }}">{{ page_num }}</a>
-        {% endif %}
+            <a class="page-link {% if page_num == pagination.page %}active{% endif %}"
+               href="{{ url_for('files', page=page_num, search=search_query) }}">{{ page_num }}</a>
         {% endfor %}
+
         {% if pagination.has_next %}
-        <a class="page-link" href="{{ url_for('files', page=pagination.next_num, search=search_query) }}">下一页</a>
+            <a class="page-link" href="{{ url_for('files', page=pagination.next_num, search=search_query) }}">下一页</a>
         {% endif %}
     </div>
 </section>
+
+<script>
+    function showSuggestions(query) {
+        if (query.length > 2) {
+            fetch(`/search_suggestions?q=${query}`)
+                .then(response => response.json())
+                .then(data => {
+                    const suggestions = document.getElementById('search-suggestions');
+                    suggestions.innerHTML = data.map(item => `<div>${item}</div>`).join('');
+                    suggestions.style.display = 'block';
+                });
+        } else {
+            document.getElementById('search-suggestions').style.display = 'none';
+        }
+    }
+
+    // 下载
+    function downloadSelected() {
+        const items = document.querySelectorAll('.select-item:checked');
+        let downloadPromises = [];
+
+        items.forEach(item => {
+            if (item.dataset.type === 'file') {
+                // 如果是文件，直接下载
+                window.open(`/download/${item.dataset.id}`, '_blank');
+            } else if (item.dataset.type === 'directory') {
+                // 如果是目录，获取目录内的所有文件并下载
+                const directoryId = item.dataset.id;
+                fetch(`/directory_files/${directoryId}`)
+                    .then(response => response.json())
+                    .then(files => {
+                        files.forEach(file => {
+                            window.open(`/download/${file.download_link}`, '_blank');
+                        });
+                    })
+                    .catch(error => {
+                        console.error('Error fetching directory files:', error);
+                    });
+            }
+        });
+
+        // 提示用户查看新标签页
+        if (items.length > 0) {
+            alert('已在后台打开下载链接，请查看浏览器下载列表');
+        }
+    }
+
+    // 全选/反选功能
+    function toggleSelectAll(source) {
+        const checkboxes = document.querySelectorAll('.select-item');
+        checkboxes.forEach(checkbox => {
+            checkbox.checked = source.checked;
+        });
+
+        // 更新全选按钮状态
+        updateSelectAllState();
+    }
+
+    // 更新全选按钮状态
+    function updateSelectAllState() {
+        const checkboxes = document.querySelectorAll('.select-item');
+        const selectAllCheckbox = document.getElementById('selectAll');
+
+        if (checkboxes.length === 0) {
+            selectAllCheckbox.checked = false;
+            selectAllCheckbox.disabled = true;
+            return;
+        }
+
+        selectAllCheckbox.disabled = false;
+
+        // 检查是否所有复选框都被选中
+        const allChecked = Array.from(checkboxes).every(checkbox => checkbox.checked);
+        selectAllCheckbox.checked = allChecked;
+
+        // 处理部分选中状态
+        const someChecked = Array.from(checkboxes).some(checkbox => checkbox.checked);
+        selectAllCheckbox.indeterminate = someChecked && !allChecked;
+    }
+
+    // 为每个复选框添加事件监听器
+    function setupCheckboxListeners() {
+        const checkboxes = document.querySelectorAll('.select-item');
+        checkboxes.forEach(checkbox => {
+            checkbox.addEventListener('change', updateSelectAllState);
+        });
+    }
+
+    // 初始化
+    document.addEventListener('DOMContentLoaded', function() {
+        setupCheckboxListeners();
+        updateSelectAllState();
+    });
+</script>
 
 {% endblock %}

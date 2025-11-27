@@ -4,10 +4,10 @@
 <section>
     <h1>文件预览</h1>
     <div class="file-preview">
-        {% if file.filename.endswith(('png', 'jpg', 'jpeg', 'gif', 'bmp', 'svg')) %}
+        {% if file.filename.endswith(('png', 'jpg', 'jpeg', 'gif', 'bmp', 'svg', 'webp', 'ico', 'PNG', 'JPG', 'JPEG', 'GIF', 'BMP', 'SVG', 'WEBP', 'ICO')) %}
         <img alt="图片预览" class="preview-img" src="{{ url_for('download', download_link=file.download_link) }}">
 
-        {% elif file.filename.endswith(('mp4', 'webm', 'mkv', 'mov', 'avi', 'flv', 'wmv')) %}
+        {% elif file.filename.endswith(('MP4', 'WEBM', 'MKV', 'MOV', 'AVI', 'FLV', 'WMV', 'mp4', 'webm', 'mkv', 'mov', 'avi', 'flv', 'wmv')) %}
         <video class="preview-video" controls playsinline>
             <source src="{{ url_for('download', download_link=file.download_link) }}" type="video/mp4">
             <source src="{{ url_for('download', download_link=file.download_link) }}" type="video/webm">
@@ -19,7 +19,7 @@
             您的浏览器不支持视频标签，请尝试更换浏览器。
         </video>
 
-        {% elif file.filename.endswith(('mp3', 'wav', 'ogg', 'flac', 'aac', 'm4a')) %}
+        {% elif file.filename.endswith(('mp3', 'wav', 'ogg', 'flac', 'aac', 'm4a', 'MP3', 'WAV', 'OGG', 'FLAC', 'AAC', 'M4A')) %}
         <audio class="preview-audio" controls>
             <source src="{{ url_for('download', download_link=file.download_link) }}" type="audio/mpeg">
             <source src="{{ url_for('download', download_link=file.download_link) }}" type="audio/wav">

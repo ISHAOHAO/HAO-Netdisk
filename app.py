@@ -7,11 +7,13 @@ import sys
 import tempfile
 import threading
 import tkinter as tk
+import json
 import uuid
 import webbrowser
 from datetime import datetime, timedelta, timezone
 from tkinter import Tk, Toplevel, Listbox, END, ACTIVE, StringVar, Label, Entry, Button, OptionMenu
 from tkinter import messagebox
+from tkinter import ttk
 
 import requests
 from flask import Flask, send_file, abort, request, redirect, url_for, render_template, session, flash, \
@@ -21,25 +23,29 @@ from flask_sqlalchemy import SQLAlchemy
 from sqlalchemy import inspect
 from sqlalchemy import text
 from werkzeug.security import generate_password_hash, check_password_hash
+import smtplib
+import ssl
 
 app = Flask(__name__)
 tempfile.tempdir = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'uploads')
 app.config['UPLOAD_FOLDER'] = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'uploads')
 app.config['AVATAR_FOLDER'] = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'static', 'images', 'avatar')
-app.config['SECRET_KEY'] = 'secrets.token_hex(16)'
+app.config['SECRET_KEY'] = secrets.token_hex(16)
 app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///site.db'
-app.config['MAIL_SERVER'] = 'smtp.163.com'
-app.config['MAIL_PORT'] = 25
-app.config['MAIL_USERNAME'] = 'hao_netdisk@163.com'
-app.config['MAIL_PASSWORD'] = 'HBBAYKISCQCIAAEX'
+# 邮件配置通过启动器设置并保存到 mail_config.json
+# 这里先设置默认空值，实际初始化将在 Flask 启动前完成
+app.config['MAIL_SERVER'] = ''
+app.config['MAIL_PORT'] = None
+app.config['MAIL_USERNAME'] = ''
+app.config['MAIL_PASSWORD'] = ''
 app.config['MAIL_USE_TLS'] = False
 app.config['MAIL_USE_SSL'] = False
-app.config['MAIL_DEFAULT_SENDER'] = 'hao_netdisk@163.com'
-mail = Mail(app)
+app.config['MAIL_DEFAULT_SENDER'] = ''
+mail = Mail()  # 延迟 init_app，在启动服务前加载配置并 init
 db = SQLAlchemy(app)
 
 # 版本信息
-current_version = "v1.6.7"  # 当前版本
+current_version = "v1.7.5"  # 当前版本
 
 
 # 获取所有地址，筛选出公网地址
@@ -67,6 +73,28 @@ logging.basicConfig(filename='app.log', level=logging.INFO, format='%(asctime)s 
 
 def log_event(event):
     logging.info(event)
+
+
+def load_mail_config():
+    """从当前工作目录下的 mail_config.json 加载邮件配置并写入 app.config"""
+    path = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'mail_config.json')
+    if os.path.exists(path):
+        try:
+            with open(path, 'r', encoding='utf-8') as f:
+                cfg = json.load(f)
+            # 允许缺省字段
+            app.config['MAIL_SERVER'] = cfg.get('MAIL_SERVER', '')
+            app.config['MAIL_PORT'] = cfg.get('MAIL_PORT')
+            app.config['MAIL_USERNAME'] = cfg.get('MAIL_USERNAME', '')
+            app.config['MAIL_PASSWORD'] = cfg.get('MAIL_PASSWORD', '')
+            app.config['MAIL_USE_TLS'] = bool(cfg.get('MAIL_USE_TLS', False))
+            app.config['MAIL_USE_SSL'] = bool(cfg.get('MAIL_USE_SSL', False))
+            app.config['MAIL_DEFAULT_SENDER'] = cfg.get('MAIL_DEFAULT_SENDER', '')
+            log_event('邮件配置已从 mail_config.json 加载。')
+        except Exception as e:
+            log_event(f'加载 mail_config.json 失败: {e}')
+    else:
+        log_event('未找到 mail_config.json，使用默认邮件配置（空）。')
 
 
 # 数据库模型
@@ -97,6 +125,13 @@ class File(db.Model):
 
 
 class Directory(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    description = db.Column(db.String(200), nullable=False)
+    upload_time = db.Column(db.DateTime, default=db.func.current_timestamp())
+    user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
+    files = db.relationship('File', backref='directory', lazy=True)
+    is_public = db.Column(db.Boolean, default=True)  # 目录公开状态字段
+    uploader = db.relationship('User', backref='directories', lazy=True)  # 新增关联用户的关系
     id = db.Column(db.Integer, primary_key=True)
     description = db.Column(db.String(200), nullable=False)
     upload_time = db.Column(db.DateTime, default=db.func.current_timestamp())
@@ -220,13 +255,104 @@ def forgot_password():
             reset_url = url_for('reset_password', token=token, _external=True)
             html_body = render_template('reset_password_email.html', username=user.username, reset_link=reset_url)
             msg = Message('重置密码请求', recipients=[email], html=html_body)
-            mail.send(msg)
-            flash(f'重置密码的邮件已发送到您的邮箱 {email}。', 'info')
-            log_event(f'{ip_address}发送重置密码邮件到 {email} ')
+            try:
+                mail.send(msg)
+                flash(f'重置密码的邮件已发送到您的邮箱 {email}。', 'info')
+                log_event(f'{ip_address}发送重置密码邮件到 {email} 使用 flask-mail')
+            except Exception as e:
+                # 记录原始异常并尝试回退到 smtplib 直接发送（兼容不同 TLS/SSL 配置）
+                log_event(f'flask-mail 发送失败: {e}，尝试回退方式发送。')
+                try:
+                    sent = fallback_send_email(msg)
+                    if sent:
+                        flash(f'重置密码的邮件已发送到您的邮箱 {email}（回退发送）。', 'info')
+                        log_event(f'{ip_address}发送重置密码邮件到 {email} 使用回退 smtplib')
+                    else:
+                        flash(f'邮件发送失败，请检查邮件配置。', 'danger')
+                        log_event(f'{ip_address} 回退发送也失败，邮件未发送到 {email}')
+                except Exception as e2:
+                    log_event(f'回退发送异常: {e2}')
+                    flash(f'邮件发送失败，请检查邮件配置。', 'danger')
         else:
             flash(f'该电子邮件 {email} 未注册。', 'danger')
             log_event(f'电子邮件 {email} 未注册 ')
     return render_template('forgot_password.html')
+
+
+def fallback_send_email(msg: Message) -> bool:
+    """当 flask-mail 失败时，使用 smtplib 尝试直接发送邮件。
+
+    返回 True 表示发送成功，False 表示发送失败。
+    """
+    host = app.config.get('MAIL_SERVER')
+    port = app.config.get('MAIL_PORT')
+    username = app.config.get('MAIL_USERNAME')
+    password = app.config.get('MAIL_PASSWORD')
+    use_tls = bool(app.config.get('MAIL_USE_TLS', False))
+    use_ssl = bool(app.config.get('MAIL_USE_SSL', False))
+
+    if not host or not port:
+        log_event('fallback_send_email: 邮件主机或端口未配置。')
+        return False
+
+    # 构建邮件内容
+    from_addr = msg.sender or app.config.get('MAIL_DEFAULT_SENDER') or username
+    to_addrs = msg.recipients or []
+    if not to_addrs:
+        log_event('fallback_send_email: 没有收件人。')
+        return False
+
+    # prefer html if available
+    body = msg.html or msg.body or ''
+    subject = msg.subject or ''
+
+    email_text = f"Subject: {subject}\nFrom: {from_addr}\nTo: {', '.join(to_addrs)}\nContent-Type: text/html; charset=utf-8\n\n{body}"
+
+    # 尝试多种连接方式以兼容不同服务器（SSL 直连 / STARTTLS / 明文）
+    try_methods = []
+    if use_ssl:
+        try_methods.append('ssl')
+        try_methods.append('starttls')
+        try_methods.append('plain')
+    elif use_tls:
+        try_methods.append('starttls')
+        try_methods.append('plain')
+        try_methods.append('ssl')
+    else:
+        # 未指定，按常见端口顺序尝试
+        try_methods.extend(['plain', 'starttls', 'ssl'])
+
+    for method in try_methods:
+        try:
+            if method == 'ssl':
+                context = ssl.create_default_context()
+                with smtplib.SMTP_SSL(host, port, context=context, timeout=15) as server:
+                    if username and password:
+                        server.login(username, password)
+                    server.sendmail(from_addr, to_addrs, email_text.encode('utf-8'))
+                    return True
+            elif method == 'starttls':
+                with smtplib.SMTP(host, port, timeout=15) as server:
+                    server.ehlo()
+                    context = ssl.create_default_context()
+                    server.starttls(context=context)
+                    server.ehlo()
+                    if username and password:
+                        server.login(username, password)
+                    server.sendmail(from_addr, to_addrs, email_text.encode('utf-8'))
+                    return True
+            else:  # plain
+                with smtplib.SMTP(host, port, timeout=15) as server:
+                    if username and password:
+                        server.login(username, password)
+                    server.sendmail(from_addr, to_addrs, email_text.encode('utf-8'))
+                    return True
+        except Exception as e:
+            log_event(f'fallback_send_email 方法 {method} 失败: {e}')
+            # 尝试下一个方法
+            continue
+
+    return False
 
 
 @app.route('/reset_password/<token>', methods=['GET', 'POST'])
@@ -360,13 +486,18 @@ def files():
 
     # 查询所有目录，非公开目录仅允许上传者查看
     directories = Directory.query.filter(
-        Directory.description.like(f'%{search_query}%')
+        (Directory.description.like(f'%{search_query}%')) |
+        (Directory.uploader.has(username=search_query))  # 添加上传者模糊搜索
     ).filter(
         (Directory.is_public == True) | (Directory.user_id == session.get('user_id'))
     ).all()
 
     # 显示不属于任何目录的公开文件或当前用户的文件
-    files = File.query.filter(File.directory_id.is_(None)).filter(File.filename.like(f'%{search_query}%')).filter(
+    files = File.query.filter(File.directory_id.is_(None)).filter(
+        (File.filename.like(f'%{search_query}%')) |
+        (File.description.like(f'%{search_query}%')) |  # 添加文件描述模糊搜索
+        (File.uploader.has(username=search_query))  # 添加上传者模糊搜索
+    ).filter(
         (File.is_public == True) | (File.user_id == session.get('user_id'))
     ).all()
 
@@ -723,6 +854,13 @@ def delete_file():
 def start_flask_app(host, port, stop_event):
     def run():
         try:
+            # 启动前从文件加载邮件配置并初始化 Mail
+            load_mail_config()
+            try:
+                mail.init_app(app)
+            except Exception as e:
+                log_event(f"Mail 初始化失败: {e}")
+
             app.run(host=host, port=port, use_reloader=False)
         except Exception as e:
             log_event(f"Flask 服务运行出错: {e}")
@@ -740,18 +878,25 @@ def open_browser(url):
 
 
 class VersionChecker:
-    def __init__(self, root):
+    def __init__(self, root, parent_uses_grid=False, master_window=None):
         self.root = root
+        self.master_window = master_window  # 主 Tk 窗口
         # 配置信息
         self.ACCESS_TOKEN = "4af13024a4e20b212c998c308df5ca33"
         self.REPO_PATH = "is-haohao/HAO-Netdisk"
         self.API_URL = f"https://gitee.com/api/v5/repos/{self.REPO_PATH}/releases/latest"
-        # 创建检测版本按钮
-        self.check_button = tk.Button(self.root, text="检查最新版本", font=("Arial", 14), command=self.check_version,
-                                      bg="#ffffff", fg="#000000", width=12)
-        self.check_button.pack(pady=20)
-        counter = 0
-        Menubar = tk.Menu(root)
+        # 创建检测版本按钮（根据父容器使用的布局管理器调整）
+        self.check_button = ttk.Button(self.root, text="检查最新版本", command=self.check_version)
+        if parent_uses_grid:
+            self.check_button.grid(row=1, column=0, columnspan=2, padx=6, pady=10, sticky='ew')
+        else:
+            self.check_button.pack(pady=10)
+        
+        # 仅在提供主窗口且未配置过菜单时设置菜单栏
+        if not self.master_window:
+            return
+        
+        Menubar = tk.Menu(self.master_window)
         # 创建文件菜单
         FileMenu = tk.Menu(Menubar, tearoff=0)
         Menubar.add_cascade(label='帮助', menu=FileMenu)
@@ -767,9 +912,9 @@ class VersionChecker:
         Contact.add_command(label='发送邮件', command=self.send_email)
         Contact.add_command(label='我的网站', command=self.open_website)
         # 添加退出菜单项
-        Menubar.add_cascade(label='退出', command=root.quit)
+        Menubar.add_cascade(label='退出', command=self.master_window.quit)
         # 配置菜单栏
-        root.config(menu=Menubar)
+        self.master_window.config(menu=Menubar)
 
     # 打开上传目录文件夹
     def show_folder_info(self):
@@ -900,55 +1045,114 @@ class NetdiskLauncher:
             self.master.destroy()
 
     def create_widgets(self):
-        # 检测是否支持 IPv6
+        # 使用 ttk 风格和分区布局来提供更简约友好的界面
+        try:
+            self.style = ttk.Style()
+            # 使用较平滑的主题（可在不同平台回退）
+            if 'clam' in self.style.theme_names():
+                self.style.theme_use('clam')
+        except Exception:
+            self.style = None
+
+        container = ttk.Frame(self.master, padding=(12, 12, 12, 12))
+        container.pack(fill='both', expand=True)
+
+        # 顶部：运行设置
+        net_frame = ttk.LabelFrame(container, text='运行设置', padding=10)
+        net_frame.grid(row=0, column=0, sticky='nsew', padx=6, pady=6)
+
         ipv6_supported = self.check_ipv6_support()
-        # 选择运行模式 Label
-        Label(self.master, text="选择运行模式", font=("Arial", 14), bg="#2e3a4f", fg="#ffffff").pack(pady=10)
-        # Protocol Menu
         self.mode_var = StringVar(value="IPv6" if ipv6_supported else "IPv4")
-        self.protocol_menu = OptionMenu(self.master, self.mode_var, "IPv6", "IPv4", command=self.update_protocol)
-        self.protocol_menu.config(bg="#3b4d6b", fg="#ffffff", font=("Arial", 12))
-        self.protocol_menu.pack(pady=5)
-        self.protocol_menu["menu"].config(bg="#2e3a4f", fg="#ffffff", font=("Arial", 12))
-        self.protocol_menu["highlightthickness"] = 0
-        self.protocol_menu["bd"] = 0
-        # 显示 IPv6 检测状态
+        ttk.Label(net_frame, text='协议', font=("Arial", 10)).grid(row=0, column=0, sticky='w')
+        self.protocol_menu = OptionMenu(net_frame, self.mode_var, "IPv6", "IPv4", command=self.update_protocol)
+        self.protocol_menu.grid(row=0, column=1, sticky='w', padx=6)
         ipv6_status_text = "IPv6 已支持" if ipv6_supported else "IPv6 不支持"
-        ipv6_status_color = "#4caf50" if ipv6_supported else "#f44336"
-        self.ipv6_status_label = Label(self.master, text=ipv6_status_text, font=("Arial", 12), bg="#2e3a4f",
-                                       fg=ipv6_status_color)
-        self.ipv6_status_label.pack(pady=5)
-        # 端口号
-        Label(self.master, text="端口号(默认5000)", font=("Arial", 12), bg="#2e3a4f", fg="#ffffff").pack(pady=5)
-        self.port_entry = Entry(self.master, font=("Arial", 12))
-        self.port_entry.pack(pady=5)
+        self.ipv6_status_label = ttk.Label(net_frame, text=ipv6_status_text)
+        self.ipv6_status_label.grid(row=0, column=2, sticky='w', padx=6)
+
+        ttk.Label(net_frame, text='端口', font=("Arial", 10)).grid(row=1, column=0, sticky='w', pady=(8, 0))
+        self.port_entry = ttk.Entry(net_frame, width=12)
+        self.port_entry.grid(row=1, column=1, sticky='w', pady=(8, 0))
         self.port_entry.insert(0, str(self.port))
-        # 启动、停止、重启按钮
-        self.start_button = Button(self.master, text="启动服务", font=("Arial", 14), command=self.start_service,
-                                   bg="#4caf50", fg="#ffffff", width=15)
-        self.start_button.pack(pady=10)
-        self.stop_button = Button(self.master, text="停止服务", font=("Arial", 14), command=self.stop_service,
-                                  bg="#f44336", fg="#ffffff", width=15)
-        self.stop_button.pack(pady=10)
-        self.restart_button = Button(self.master, text="重启服务", font=("Arial", 14), command=self.restart_service,
-                                     bg="#ff9800", fg="#ffffff", width=15)
-        self.restart_button.pack(pady=10)
-        # 复制公网和本地链接按钮
-        self.copy_public_link_button = Button(self.master, text="复制公网访问链接", font=("Arial", 14),
-                                              command=self.copy_public_link, bg="#2196f3", fg="#ffffff", width=20)
-        self.copy_public_link_button.pack(pady=10)
-        self.copy_local_link_button = Button(self.master, text="复制本地访问链接", font=("Arial", 14),
-                                             command=self.copy_local_link, bg="#2196f3", fg="#ffffff", width=20)
-        self.copy_local_link_button.pack(pady=10)
-        # 删除文件按钮
-        self.delete_file_button = Button(self.master, text="删除文件", font=("Arial", 14),
-                                         command=self.delete_file_dialog, bg="#9c27b0", fg="#ffffff", width=15)
-        self.delete_file_button.pack(pady=10)
-        # 状态标签
-        self.status_label = Label(self.master, text="", font=("Arial", 12), bg="#2e3a4f", fg="#ffffff")
-        self.status_label.pack(pady=10)
-        # VersionChecker 组件
-        self.version_checker = VersionChecker(self.master)
+
+        # 中间：控制按钮（统一样式、网格排列）
+        controls_frame = ttk.LabelFrame(container, text='服务控制', padding=10)
+        controls_frame.grid(row=1, column=0, sticky='nsew', padx=6, pady=6)
+
+        self.start_button = ttk.Button(controls_frame, text='启动服务', command=self.start_service)
+        self.stop_button = ttk.Button(controls_frame, text='停止服务', command=self.stop_service)
+        self.restart_button = ttk.Button(controls_frame, text='重启服务', command=self.restart_service)
+
+        self.start_button.grid(row=0, column=0, padx=6, pady=6, sticky='ew')
+        self.stop_button.grid(row=0, column=1, padx=6, pady=6, sticky='ew')
+        self.restart_button.grid(row=0, column=2, padx=6, pady=6, sticky='ew')
+
+        self.copy_public_link_button = ttk.Button(controls_frame, text='复制公网访问链接', command=self.copy_public_link)
+        self.copy_local_link_button = ttk.Button(controls_frame, text='复制本地访问链接', command=self.copy_local_link)
+        self.delete_file_button = ttk.Button(controls_frame, text='删除文件', command=self.delete_file_dialog)
+
+        self.copy_public_link_button.grid(row=1, column=0, padx=6, pady=6, sticky='ew')
+        self.copy_local_link_button.grid(row=1, column=1, padx=6, pady=6, sticky='ew')
+        self.delete_file_button.grid(row=1, column=2, padx=6, pady=6, sticky='ew')
+
+        # 右侧/底部：状态与工具
+        info_frame = ttk.LabelFrame(container, text='状态', padding=10)
+        info_frame.grid(row=0, column=1, rowspan=2, sticky='nsew', padx=6, pady=6)
+
+        # 状态指示灯
+        self.status_canvas = tk.Canvas(info_frame, width=18, height=18, highlightthickness=0)
+        self.status_canvas.grid(row=0, column=0, sticky='w')
+        self.status_indicator = self.status_canvas.create_oval(2, 2, 16, 16, fill='#f44336')
+        self.status_text = ttk.Label(info_frame, text='服务未在运行', font=("Arial", 10))
+        self.status_text.grid(row=0, column=1, padx=8)
+
+        # VersionChecker 组件（保持原有逻辑，但放在 info_frame 下，使用 grid）
+        self.version_checker = VersionChecker(info_frame, parent_uses_grid=True, master_window=self.master)
+
+        # 邮件配置折叠组（简化显示）
+        mail_frame = ttk.LabelFrame(container, text='邮件配置', padding=10)
+        mail_frame.grid(row=2, column=0, columnspan=2, sticky='ew', padx=6, pady=6)
+
+        # 在 mail_frame 中使用简洁两列布局
+        ttk.Label(mail_frame, text='SMTP 服务器', width=12).grid(row=0, column=0, sticky='w')
+        self.mail_server_entry = ttk.Entry(mail_frame)
+        self.mail_server_entry.grid(row=0, column=1, sticky='ew', padx=6)
+
+        ttk.Label(mail_frame, text='SMTP 端口').grid(row=0, column=2, sticky='w')
+        self.mail_port_entry = ttk.Entry(mail_frame, width=8)
+        self.mail_port_entry.grid(row=0, column=3, sticky='w', padx=6)
+
+        ttk.Label(mail_frame, text='用户名').grid(row=1, column=0, sticky='w', pady=(6, 0))
+        self.mail_username_entry = ttk.Entry(mail_frame)
+        self.mail_username_entry.grid(row=1, column=1, sticky='ew', padx=6, pady=(6, 0))
+
+        ttk.Label(mail_frame, text='密码').grid(row=1, column=2, sticky='w', pady=(6, 0))
+        self.mail_password_entry = ttk.Entry(mail_frame, show='*', width=20)
+        self.mail_password_entry.grid(row=1, column=3, sticky='w', padx=6, pady=(6, 0))
+
+        ttk.Label(mail_frame, text='默认发件人').grid(row=2, column=0, sticky='w', pady=(6, 0))
+        self.mail_sender_entry = ttk.Entry(mail_frame)
+        self.mail_sender_entry.grid(row=2, column=1, sticky='ew', padx=6, pady=(6, 0))
+
+        self.mail_use_tls_var = tk.BooleanVar(value=False)
+        self.mail_use_ssl_var = tk.BooleanVar(value=False)
+        self.mail_tls_cb = ttk.Checkbutton(mail_frame, text='使用 TLS', variable=self.mail_use_tls_var)
+        self.mail_ssl_cb = ttk.Checkbutton(mail_frame, text='使用 SSL', variable=self.mail_use_ssl_var)
+        self.mail_tls_cb.grid(row=2, column=2, sticky='w')
+        self.mail_ssl_cb.grid(row=2, column=3, sticky='w')
+
+        self.save_mail_button = ttk.Button(mail_frame, text='保存邮件配置', command=self.save_mail_config)
+        self.save_mail_button.grid(row=3, column=0, columnspan=4, pady=(8, 0))
+
+        # 让列根据需要扩展
+        container.columnconfigure(0, weight=3)
+        container.columnconfigure(1, weight=1)
+        mail_frame.columnconfigure(1, weight=1)
+        # 在 GUI 中加载已有的邮件配置
+        try:
+            self.load_mail_config_into_gui()
+        except Exception:
+            pass
 
     # 检测是否支持 IPv6 的函数
     def check_ipv6_support(self):
@@ -958,6 +1162,56 @@ class NetdiskLauncher:
             return True
         except OSError:
             return False
+
+    def save_mail_config(self):
+        """将 GUI 中的邮件配置保存到 mail_config.json"""
+        cfg = {}
+        cfg['MAIL_SERVER'] = self.mail_server_entry.get().strip()
+        try:
+            port_val = int(self.mail_port_entry.get().strip()) if self.mail_port_entry.get().strip() else None
+        except ValueError:
+            messagebox.showerror('错误', 'SMTP 端口必须为数字或留空。')
+            return
+        cfg['MAIL_PORT'] = port_val
+        cfg['MAIL_USERNAME'] = self.mail_username_entry.get().strip()
+        cfg['MAIL_PASSWORD'] = self.mail_password_entry.get().strip()
+        cfg['MAIL_DEFAULT_SENDER'] = self.mail_sender_entry.get().strip()
+        cfg['MAIL_USE_TLS'] = bool(self.mail_use_tls_var.get())
+        cfg['MAIL_USE_SSL'] = bool(self.mail_use_ssl_var.get())
+        path = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'mail_config.json')
+        try:
+            with open(path, 'w', encoding='utf-8') as f:
+                json.dump(cfg, f, ensure_ascii=False, indent=2)
+            messagebox.showinfo('成功', '邮件配置已保存到 mail_config.json')
+            log_event('用户在启动器中保存了邮件配置。')
+        except Exception as e:
+            messagebox.showerror('错误', f'保存邮件配置失败: {e}')
+            log_event(f'保存邮件配置失败: {e}')
+
+    def load_mail_config_into_gui(self):
+        """从 mail_config.json 加载并填充到 GUI 输入框（如果存在）"""
+        path = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'mail_config.json')
+        if os.path.exists(path):
+            try:
+                with open(path, 'r', encoding='utf-8') as f:
+                    cfg = json.load(f)
+                self.mail_server_entry.delete(0, tk.END)
+                self.mail_server_entry.insert(0, cfg.get('MAIL_SERVER', ''))
+                port = cfg.get('MAIL_PORT')
+                self.mail_port_entry.delete(0, tk.END)
+                if port:
+                    self.mail_port_entry.insert(0, str(port))
+                self.mail_username_entry.delete(0, tk.END)
+                self.mail_username_entry.insert(0, cfg.get('MAIL_USERNAME', ''))
+                self.mail_password_entry.delete(0, tk.END)
+                self.mail_password_entry.insert(0, cfg.get('MAIL_PASSWORD', ''))
+                self.mail_sender_entry.delete(0, tk.END)
+                self.mail_sender_entry.insert(0, cfg.get('MAIL_DEFAULT_SENDER', ''))
+                self.mail_use_tls_var.set(bool(cfg.get('MAIL_USE_TLS', False)))
+                self.mail_use_ssl_var.set(bool(cfg.get('MAIL_USE_SSL', False)))
+            except Exception as e:
+                log_event(f'从 mail_config.json 加载到 GUI 失败: {e}')
+                # 不打断启动器
 
     def update_protocol(self, value):
         if value == "IPv6":
@@ -1005,10 +1259,23 @@ class NetdiskLauncher:
         messagebox.showinfo("信息", "本地访问链接已复制到剪贴板！")
 
     def update_status(self):
-        if self.process and self.process.is_alive():
-            self.status_label.config(text="服务正在运行", fg="#4caf50")
-        else:
-            self.status_label.config(text="服务未在运行", fg="#f44336")
+        # 更新状态指示灯和文本
+        try:
+            if self.process and self.process.is_alive():
+                self.status_canvas.itemconfig(self.status_indicator, fill='#4caf50')
+                self.status_text.config(text='服务正在运行')
+            else:
+                self.status_canvas.itemconfig(self.status_indicator, fill='#f44336')
+                self.status_text.config(text='服务未在运行')
+        except Exception:
+            # 回退到旧的 label（如果界面未完全初始化）
+            try:
+                if self.process and self.process.is_alive():
+                    self.status_label.config(text="服务正在运行", fg="#4caf50")
+                else:
+                    self.status_label.config(text="服务未在运行", fg="#f44336")
+            except Exception:
+                pass
 
     def start_service(self):
         if not self.process or not self.process.is_alive():
