@@ -33,7 +33,7 @@ app.config['AVATAR_FOLDER'] = os.path.join(os.path.dirname(os.path.abspath(__fil
 app.config['SECRET_KEY'] = secrets.token_hex(16)
 app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///site.db'
 # 邮件配置通过启动器设置并保存到 mail_config.json
-# 这里先设置默认空值，实际初始化将在 Flask 启动前完成
+# 先设置默认空值，实际初始化将在 Flask 启动前完成
 app.config['MAIL_SERVER'] = ''
 app.config['MAIL_PORT'] = None
 app.config['MAIL_USERNAME'] = ''
